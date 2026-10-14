@@ -1,0 +1,25 @@
+{
+  "name": "@anvil-works/anvil-ty",
+  "version": "0.1.0-canary.0",
+  "description": "Native Python validation for Anvil apps",
+  "license": "MIT",
+  "main": "index.cjs",
+  "files": [
+    "index.cjs"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/anvil-works/ruff.git",
+    "directory": "anvil/npm"
+  },
+  "optionalDependencies": {
+    "@anvil-works/anvil-ty-darwin-arm64": "0.1.0-canary.0",
+    "@anvil-works/anvil-ty-darwin-x64": "0.1.0-canary.0",
+    "@anvil-works/anvil-ty-linux-arm64": "0.1.0-canary.0",
+    "@anvil-works/anvil-ty-linux-x64": "0.1.0-canary.0",
+    "@anvil-works/anvil-ty-win32-x64": "0.1.0-canary.0"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}

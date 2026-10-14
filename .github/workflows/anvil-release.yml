@@ -1,0 +1,146 @@
+name: Build Anvil validation packages
+
+on:
+  push:
+    branches: [anvil]
+    paths:
+      [
+        anvil/**,
+        crates/**,
+        Cargo.toml,
+        Cargo.lock,
+        rust-toolchain.toml,
+        .cargo/**,
+        .github/workflows/anvil-release.yml,
+      ]
+  pull_request:
+    paths:
+      [
+        anvil/**,
+        crates/**,
+        Cargo.toml,
+        Cargo.lock,
+        rust-toolchain.toml,
+        .cargo/**,
+        .github/workflows/anvil-release.yml,
+      ]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: anvil-release-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_INCREMENTAL: "0"
+  CARGO_BUILD_JOBS: "2"
+  CARGO_PROFILE_DEV_DEBUG: "0"
+  PYTHONUTF8: "1"
+
+jobs:
+  build:
+    name: Build and test ${{ matrix.platform }}
+    timeout-minutes: 90
+    runs-on: ${{ matrix.runner }}
+    container: ${{ matrix.container }}
+    defaults:
+      run:
+        shell: bash
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: darwin-arm64
+            runner: macos-15
+            container: ""
+          - platform: darwin-x64
+            runner: macos-15-intel
+            container: ""
+          - platform: linux-arm64
+            runner: ubuntu-24.04-arm
+            # Debian 12 keeps GNU builds compatible with the tested glibc baseline.
+            container: rust:1.99-slim-bookworm@sha256:2c3a22f0a5533ea2dd5a16627bc841228151faa2d4de2644ac9987e4a2f1f2fa
+          - platform: linux-x64
+            runner: ubuntu-24.04
+            container: rust:1.99-slim-bookworm@sha256:2c3a22f0a5533ea2dd5a16627bc841228151faa2d4de2644ac9987e4a2f1f2fa
+          - platform: win32-x64
+            runner: windows-2022
+            container: ""
+    steps:
+      - name: Prepare Linux container
+        if: startsWith(matrix.platform, 'linux-')
+        run: |
+          apt-get update -qq
+          apt-get install -y --no-install-recommends git python3 python-is-python3 ca-certificates xz-utils
+      - name: Preserve source bytes across platforms
+        run: git config --global core.autocrlf false
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: "24"
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        if: runner.os != 'Linux'
+        with:
+          python-version: "3.14"
+      - name: Install pinned Rust
+        run: |
+          rustup toolchain install 1.99.0 --profile minimal
+          rustup component add rustfmt --toolchain 1.99.0
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          key: anvil-${{ matrix.platform }}
+          workspaces: anvil/native -> target
+          cache-on-failure: true
+      - name: Build and test native checker
+        working-directory: anvil/native
+        run: |
+          cargo fmt --check
+          cargo test --locked
+          cargo build --release --locked
+      - name: Package and exercise installed checker
+        id: package
+        env:
+          PLATFORM: ${{ matrix.platform }}
+        run: |
+          # Container shell steps do not share the checkout action's Git config.
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          test -z "$(git status --porcelain)"
+          python anvil/package.py --output "anvil/dist/ci/$PLATFORM/bundle"
+          ANVIL_RELEASE_PACKAGES="anvil/dist/ci/$PLATFORM" python anvil/tests/test_release_smoke.py -v
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: ${{ !cancelled() && steps.package.outcome != 'skipped' }}
+        with:
+          name: anvil-ty-platform-${{ matrix.platform }}
+          path: anvil/dist/ci/${{ matrix.platform }}/*.tgz
+          if-no-files-found: error
+          overwrite: true
+
+  collect:
+    name: Collect complete release for local publication
+    needs: build
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.14"
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          pattern: anvil-ty-platform-*
+          path: anvil/dist/incoming
+      - name: Verify complete package set
+        run: |
+          python -m unittest discover -s anvil/tests -p test_collect_release.py -v
+          python anvil/collect_release.py anvil/dist/incoming anvil/dist/release
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: anvil-ty-release
+          path: anvil/dist/release/*
+          if-no-files-found: error
+          overwrite: true

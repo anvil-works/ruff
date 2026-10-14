@@ -2,6 +2,13 @@
 
 This repository contains both Ruff (a Python linter and formatter) and ty (a Python type checker). The crates follow a naming convention: `ruff_*` for Ruff-specific code and `ty_*` for ty-specific code. ty reuses several Ruff crates, including the Python parser (`ruff_python_parser`) and AST definitions (`ruff_python_ast`).
 
+## Anvil fork
+
+`main` tracks Astral's upstream Ruff repository. The `anvil` branch carries the
+Anvil validation adapter and npm packages in one commit.
+For Anvil development, read [anvil/AGENTS.md](anvil/AGENTS.md) and its linked guides.
+Keep Anvil-specific code under `anvil/` and engine sources identical to `main`.
+
 ## Before contributing
 
 Before starting work on an issue and again before opening a pull request, follow the
