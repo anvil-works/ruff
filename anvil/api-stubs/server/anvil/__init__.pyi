@@ -5,8 +5,9 @@
 # Type stubs for Anvil
 # Generated files: client/anvil/__init__.pyi, server/anvil/__init__.pyi
 
-from typing import Any, Callable, TypeVar, overload, Iterator, Mapping, Literal, TypedDict
-from typing_extensions import Unpack, deprecated, override
+from datetime import date as _date, datetime as _datetime
+from typing import Any, Callable, ClassVar, Generic, Iterable, overload, Iterator, Mapping, Literal, TypedDict
+from typing_extensions import TypeVar, Unpack, deprecated, override
 
 
 _T = TypeVar("_T")
@@ -93,7 +94,7 @@ class _SlottedLayoutKwargs(_IndexLayoutKwargs, total=False):
 class Media:
     """A Media object represents binary data, such as a file.
 
-    [Anvil Docs](https://anvil.works/docs/media)"""
+    [Anvil Docs](https://anvil.works/docs/other-concepts/working-with-files/media)"""
 
     content_type: str
     """The MIME type of this Media."""
@@ -110,13 +111,13 @@ class Media:
     def get_bytes(self) -> bytes:
         """Get a binary string of the data represented by this Media object.
 
-        [Anvil Docs](https://anvil.works/docs/media)"""
+        [Anvil Docs](https://anvil.works/docs/other-concepts/working-with-files/media)"""
         ...
 
     def get_url(self) -> str | None:
         """Get a Media object's URL, or None if there isn't one associated with it.
 
-        [Anvil Docs](https://anvil.works/docs/media)"""
+        [Anvil Docs](https://anvil.works/docs/other-concepts/working-with-files/media)"""
         ...
 
 
@@ -125,7 +126,7 @@ class BlobMedia(Media):
 
     Optionally specify a filename as well.
 
-    [Anvil Docs](https://anvil.works/docs/media)"""
+    [Anvil Docs](https://anvil.works/docs/other-concepts/working-with-files/media)"""
 
     def __init__(self, content_type: str, content: bytes, *, name: str | None = None) -> None: ...
 
@@ -140,7 +141,7 @@ class URLMedia(Media):
     Caution: Getting data from URLs directly in your code will often fail
     for security reasons, or fail to handle binary data.
 
-    [Anvil Docs](https://anvil.works/docs/media)"""
+    [Anvil Docs](https://anvil.works/docs/other-concepts/working-with-files/media)"""
 
     def __init__(self, url: str, /) -> None: ...
 
@@ -162,7 +163,7 @@ class AppEnvironment:
 class AppInfo:
     """Information about the current app.
 
-    [Anvil Docs](https://anvil.works/docs/deployment/environment-variables)"""
+    [Anvil Docs](https://anvil.works/docs/api/anvil#AppInfo)"""
 
     id: str
     """A unique identifier for the current app."""
@@ -220,7 +221,7 @@ def is_server_side() -> Literal[True]:
 class _Secrets:
     """Access to app secrets.
 
-    [Anvil Docs](https://anvil.works/docs/deployment/secrets)"""
+    [Anvil Docs](https://anvil.works/docs/workflows/security/encrypting-secret-data)"""
 
     def get_secret(self, name: str) -> str | None: ...
     def __getattr__(self, name: str) -> str | None: ...

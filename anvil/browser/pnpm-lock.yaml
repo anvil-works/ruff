@@ -1,0 +1,74 @@
+lockfileVersion: "9.0"
+
+settings:
+  autoInstallPeers: true
+  excludeLinksFromLockfile: false
+
+importers:
+  .:
+    dependencies:
+      comlink:
+        specifier: ^4.4.2
+        version: 4.4.2
+    devDependencies:
+      "@anvil-works/python-stubs":
+        specifier: file:../../../anvil-python-stubs/.packages/anvil-works-python-stubs-0.1.0-canary.1.tgz
+        version: file:../../../anvil-python-stubs/.packages/anvil-works-python-stubs-0.1.0-canary.1.tgz
+      "@playwright/test":
+        specifier: ^1.63.0
+        version: 1.64.1
+
+packages:
+  "@anvil-works/python-stubs@file:../../../anvil-python-stubs/.packages/anvil-works-python-stubs-0.1.0-canary.1.tgz":
+    resolution:
+      {
+        integrity: sha512-AxeXfQPTeNfymwMr51dfmMwEDQQtIiJFKoP6OCBPfMdpp/XXGNPAfjx4PU+S5gz7J98t8QiTZb9+cag1qQ7blA==,
+        tarball: file:../../../anvil-python-stubs/.packages/anvil-works-python-stubs-0.1.0-canary.1.tgz,
+      }
+    version: 0.1.0-canary.1
+
+  "@playwright/test@1.64.1":
+    resolution:
+      {
+        integrity: sha512-IaYGml/nSOiZWROfPtuIL7neuu9qDOZ3TNvNljUIrhDMxiGTgPjzj/g9p9RxpS2tSepPDRY+UwAaEeiKtUvIAg==,
+      }
+    engines: { node: ">=20" }
+    hasBin: true
+
+  comlink@4.4.2:
+    resolution:
+      {
+        integrity: sha512-OxGdvBmJuNKSCMO4NTl1L47VRp6xn2wG4F/2hYzB6tiCb709otOxtEYCSvK80PtjODfXXZu8ds+Nw5kVCjqd2g==,
+      }
+
+  playwright-core@1.64.1:
+    resolution:
+      {
+        integrity: sha512-BC4s8y6SEVA6Q1rSxZTto8hI1KUI3xXlHGZgvGqP4IqPdI/a6FX9H29IDNz7vKo9l21b6LfYosScPL6M3xxyDQ==,
+      }
+    engines: { node: ">=20" }
+    hasBin: true
+
+  playwright@1.64.1:
+    resolution:
+      {
+        integrity: sha512-HCrVhHr5QQuwYoswEUGTb7gGp522yflbv/ST8nF4sFWGuLjQCt17Q/EubpGGSNKYn1tsTCPZxqHhHCfVURu7UA==,
+      }
+    engines: { node: ">=20" }
+    hasBin: true
+
+snapshots:
+  "@anvil-works/python-stubs@file:../../../anvil-python-stubs/.packages/anvil-works-python-stubs-0.1.0-canary.1.tgz":
+    {}
+
+  "@playwright/test@1.64.1":
+    dependencies:
+      playwright: 1.64.1
+
+  comlink@4.4.2: {}
+
+  playwright-core@1.64.1: {}
+
+  playwright@1.64.1:
+    dependencies:
+      playwright-core: 1.64.1

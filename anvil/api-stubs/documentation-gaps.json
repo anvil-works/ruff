@@ -1,0 +1,24 @@
+{
+  "missing": [
+    "anvil.Canvas.add_color_stop",
+    "anvil.GoogleMap.AbstractOverlay.add_component",
+    "anvil.GoogleMap.AbstractOverlay.fit_bounds",
+    "anvil.GoogleMap.AbstractOverlay.get_bounds",
+    "anvil.GoogleMap.AbstractOverlay.pan_by",
+    "anvil.GoogleMap.AbstractOverlay.pan_to",
+    "anvil.GoogleMap.AbstractOverlay.pan_to_bounds",
+    "anvil.GoogleMap.Data.Feature.Feature",
+    "anvil.GoogleMap.Data.Geometry.Geometry",
+    "anvil.GoogleMap.Data.GeometryCollection.GeometryCollection",
+    "anvil.GoogleMap.Data.LineString.LineString",
+    "anvil.GoogleMap.Data.LinearRing.LinearRing",
+    "anvil.GoogleMap.Data.MultiLineString.MultiLineString",
+    "anvil.GoogleMap.Data.MultiPoint.MultiPoint",
+    "anvil.GoogleMap.Data.MultiPolygon.MultiPolygon",
+    "anvil.GoogleMap.Data.Point.Point",
+    "anvil.GoogleMap.Data.Polygon.Polygon",
+    "anvil.GoogleMap.Data.StyleOptions.StyleOptions",
+    "anvil.component"
+  ],
+  "missingEvents": []
+}

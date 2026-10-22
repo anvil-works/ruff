@@ -29,6 +29,7 @@ use ty_project::{CheckMode, ProjectMetadata};
 use ty_project::{Db, ProjectDatabase, SemanticDb as _};
 use ty_python_core::program::FallibleStrategy;
 use ty_python_semantic::ProgramEnvironment;
+use ty_python_semantic::types::ide_support::has_callable_alternative;
 use wasm_bindgen::prelude::*;
 
 #[wasm_bindgen]
@@ -734,9 +735,9 @@ impl Workspace {
 
         let offset = position.to_text_size(&source, &index, self.position_encoding)?;
 
-        let Some(signature_help_info) =
-            signature_help(&self.db, self.db.program_file(file_id.file), offset)
-        else {
+        let file = self.db.program_file(file_id.file);
+        let env = ProgramEnvironment::from_file(file);
+        let Some(signature_help_info) = signature_help(&self.db, file, offset) else {
             return Ok(None);
         };
 
@@ -744,6 +745,12 @@ impl Workspace {
             .signatures
             .into_iter()
             .map(|sig| {
+                let active_parameter_expects_callable = sig
+                    .active_parameter
+                    .and_then(|index| sig.parameters.get(index))
+                    .is_some_and(|parameter| {
+                        has_callable_alternative(&self.db, &env, parameter.ty)
+                    });
                 let parameters = sig
                     .parameters
                     .into_iter()
@@ -760,6 +767,7 @@ impl Workspace {
                         .map(|docstring| docstring.render_plaintext()),
                     parameters,
                     active_parameter: sig.active_parameter.and_then(|p| u32::try_from(p).ok()),
+                    active_parameter_expects_callable,
                 }
             })
             .collect();
@@ -1502,6 +1510,8 @@ pub struct SignatureInformation {
     #[wasm_bindgen(getter_with_clone)]
     pub parameters: Vec<ParameterInformation>,
     pub active_parameter: Option<u32>,
+    /// Whether the active parameter has a known callable alternative.
+    pub active_parameter_expects_callable: bool,
 }
 
 #[wasm_bindgen]

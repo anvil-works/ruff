@@ -1,0 +1,69 @@
+{
+  "anvil": {
+    "priority": {
+      "server": 2,
+      "get_open_form": 1
+    }
+  },
+  "anvil.Button": {
+    "suggestedAttr": "text"
+  },
+  "anvil.CheckBox": {
+    "suggestedAttr": "checked"
+  },
+  "anvil.DatePicker": {
+    "suggestedAttr": "date"
+  },
+  "anvil.DropDown": {
+    "suggestedAttr": "selected_value"
+  },
+  "anvil.email": {
+    "suggestedAttr": "send"
+  },
+  "anvil.FileLoader": {
+    "suggestedAttr": "file"
+  },
+  "anvil.Image": {
+    "suggestedAttr": "source"
+  },
+  "anvil.Label": {
+    "suggestedAttr": "text"
+  },
+  "anvil.Plot": {
+    "suggestedAttr": "data"
+  },
+  "anvil.RadioButton": {
+    "suggestedAttr": "selected"
+  },
+  "anvil.RepeatingPanel": {
+    "suggestedAttr": "items"
+  },
+  "anvil.RichText": {
+    "suggestedAttr": "content"
+  },
+  "anvil.server": {
+    "suggestedAttr": "call"
+  },
+  "anvil.server.BackgroundTask": {
+    "priority": {
+      "get_state": 3,
+      "get_return_value": 2,
+      "kill": 1
+    }
+  },
+  "anvil.TextArea": {
+    "suggestedAttr": "text"
+  },
+  "anvil.TextBox": {
+    "suggestedAttr": "text"
+  },
+  "anvil.Timer": {
+    "suggestedAttr": "interval"
+  },
+  "anvil.users": {
+    "suggestedAttr": "login_with_form"
+  },
+  "anvil.YouTubeVideo": {
+    "suggestedAttr": "youtube_id"
+  }
+}

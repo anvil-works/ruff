@@ -13,14 +13,18 @@ _ComponentClass = TypeVar("_ComponentClass", bound=type[Component])
 in_designer: bool
 """True when code is running in the Anvil designer, otherwise False.
 
-[Anvil Docs](https://anvil.works/docs/client/advanced-layouts/component-api/designer-module)"""
+[Anvil Docs](https://anvil.works/docs/client/forms/advanced-layouts/component-api/designer-module)"""
 
 def get_design_name(component: Any, /) -> str | None:
-    """Get the design-time name for a component, if available."""
+    """Get the design-time name for a component, if available.
+
+    [Anvil Docs](https://anvil.works/docs/client/forms/advanced-layouts/component-api/designer-module)"""
     ...
 
 def get_designer_state(component: Any, /) -> Mapping[str, Any]:
-    """Get component-specific state managed by the designer."""
+    """Get component-specific state managed by the designer.
+
+    [Anvil Docs](https://anvil.works/docs/client/forms/advanced-layouts/component-api/designer-module)"""
     ...
 
 def update_component_properties(
@@ -28,22 +32,30 @@ def update_component_properties(
     properties: dict[str, Any] | None = None,
     layout_properties: dict[str, Any] | None = None,
 ) -> None:
-    """Store updated component/container properties in the designer."""
+    """Store updated component/container properties in the designer.
+
+    [Anvil Docs](https://anvil.works/docs/client/forms/advanced-layouts/component-api/designer-module)"""
     ...
 
 def update_component_sections(
     component: Any,
     section_updates: dict[str, dict[str, Any] | None] | None = None,
 ) -> None:
-    """Notify the designer that sections have moved, changed, or been removed."""
+    """Notify the designer that sections have moved, changed, or been removed.
+
+    [Anvil Docs](https://anvil.works/docs/client/forms/advanced-layouts/component-api/designer-module)"""
     ...
 
 def start_editing_subform(form_component: Any, /) -> None:
-    """Request that the designer start editing a nested form component."""
+    """Request that the designer start editing a nested form component.
+
+    [Anvil Docs](https://anvil.works/docs/client/forms/advanced-layouts/component-api/designer-module)"""
     ...
 
 def start_editing_form(requesting_component: Any, form_property_value: str, /) -> None:
-    """Request that the designer switch to editing another form."""
+    """Request that the designer switch to editing another form.
+
+    [Anvil Docs](https://anvil.works/docs/client/forms/advanced-layouts/component-api/designer-module)"""
     ...
 
 def register_interaction(
@@ -52,17 +64,21 @@ def register_interaction(
     event: str | None = "dblclick",
     callback: Callable[[Any], Any] | None = None,
 ) -> None:
-    """Register a design-time mouse interaction callback for a component."""
+    """Register a design-time mouse interaction callback for a component.
+
+    [Anvil Docs](https://anvil.works/docs/client/forms/advanced-layouts/component-api/designer-module)"""
     ...
 
 def notify_interactions_changed(component: Any, /) -> None:
-    """Notify the designer that available interactions may have changed."""
+    """Notify the designer that available interactions may have changed.
+
+    [Anvil Docs](https://anvil.works/docs/client/forms/advanced-layouts/component-api/designer-module)"""
     ...
 
 def get_design_component(component_class: _ComponentClass, /) -> _ComponentClass:
     """Get the design-time class for a component class.
 
-    [Anvil Docs](https://anvil.works/docs/client/advanced-layouts/component-api/designer-module)"""
+    [Anvil Docs](https://anvil.works/docs/client/forms/advanced-layouts/component-api/designer-module)"""
     ...
 
 def request_form_property_change(
@@ -72,7 +88,9 @@ def request_form_property_change(
     property_value: Any,
     /,
 ) -> None:
-    """Request a property change on a form selected by a form-property value."""
+    """Request a property change on a form selected by a form-property value.
+
+    [Anvil Docs](https://anvil.works/docs/client/forms/advanced-layouts/component-api/designer-module)"""
     ...
 
 def start_inline_editing(
@@ -82,5 +100,7 @@ def start_inline_editing(
     *,
     on_finished: Callable[[], Any] | None = None,
 ) -> None:
-    """Request inline editing for a string property in the designer."""
+    """Request inline editing for a string property in the designer.
+
+    [Anvil Docs](https://anvil.works/docs/client/forms/advanced-layouts/component-api/designer-module)"""
     ...

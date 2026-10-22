@@ -135,12 +135,12 @@ class SearchIterator(Generic[_T], Iterator[_T]):
 
         Only available with Accelerated Data Tables; not available with legacy Data Tables.
 
-        [Anvil Docs](https://anvil.works/docs/data-tables/accelerated-tables)"""
+        [Anvil Docs](https://anvil.works/docs/data-tables/data-tables-in-code)"""
         ...
     def to_csv(self, escape_for_excel: bool = False) -> Media:
         """Get the search results in CSV format.
 
-        [Anvil Docs](https://anvil.works/docs/data-tables/export-csv)"""
+        [Anvil Docs](https://anvil.works/docs/data-tables/data-tables-in-code#csv-export)"""
         ...
     def delete_all_rows(self) -> None:
         """Delete all rows matching this search.
@@ -195,7 +195,7 @@ class Table(Generic[_T]):
 
         Only available with Accelerated Data Tables; not available with legacy Data Tables.
 
-        [Anvil Docs](https://anvil.works/docs/data-tables/accelerated-tables)"""
+        [Anvil Docs](https://anvil.works/docs/data-tables/data-tables-in-code)"""
         ...
     def has_row(self, row: Row, /) -> bool:
         """Return whether this table or view contains the given row.
@@ -217,12 +217,12 @@ class Table(Generic[_T]):
 
         Only available with Accelerated Data Tables; not available with legacy Data Tables.
 
-        [Anvil Docs](https://anvil.works/docs/data-tables/accelerated-tables#column-restricted-views)"""
+        [Anvil Docs](https://anvil.works/docs/data-tables/data-tables-in-code#column-restricted-views)"""
         ...
     def to_csv(self, escape_for_excel: bool = False) -> Media:
         """Get the table in CSV format.
 
-        [Anvil Docs](https://anvil.works/docs/data-tables/export-csv)"""
+        [Anvil Docs](https://anvil.works/docs/data-tables/data-tables-in-code#csv-export)"""
         ...
     def client_readable(self, *view_restrictions: Any, **row_restrictions: Any) -> "Table[_T]":
         """Return a view of this table that clients can read.
@@ -273,84 +273,84 @@ class Table(Generic[_T]):
 def order_by(column: str, /, ascending: bool = True) -> Any:
     """Create an ordering query operator.
 
-    [Anvil Docs](https://anvil.works/docs/data-tables/data-tables-in-code#searching-and-querying-data-tables)"""
+    [Anvil Docs](https://anvil.works/docs/data-tables/data-tables-in-code#searching-querying-a-table)"""
     ...
 
 class _Query:
     """Query operators for searching tables.
 
-    [Anvil Docs](https://anvil.works/docs/data-tables/data-tables-in-code#searching-and-querying-data-tables)"""
+    [Anvil Docs](https://anvil.works/docs/data-tables/data-tables-in-code#searching-querying-a-table)"""
     @staticmethod
     def any_of(*args: Any) -> Any:
         """Match any of the given conditions.
 
-        [Anvil Docs](https://anvil.works/docs/data-tables/data-tables-in-code#searching-and-querying-data-tables)"""
+        [Anvil Docs](https://anvil.works/docs/data-tables/data-tables-in-code#searching-querying-a-table)"""
         ...
     @staticmethod
     def all_of(*args: Any) -> Any:
         """Match all of the given conditions.
 
-        [Anvil Docs](https://anvil.works/docs/data-tables/data-tables-in-code#searching-and-querying-data-tables)"""
+        [Anvil Docs](https://anvil.works/docs/data-tables/data-tables-in-code#searching-querying-a-table)"""
         ...
     @staticmethod
     def none_of(*args: Any) -> Any:
         """Match none of the given conditions.
 
-        [Anvil Docs](https://anvil.works/docs/data-tables/data-tables-in-code#searching-and-querying-data-tables)"""
+        [Anvil Docs](https://anvil.works/docs/data-tables/data-tables-in-code#searching-querying-a-table)"""
         ...
     @staticmethod
     def like(pattern: str) -> Any:
         """Match using SQL LIKE pattern (case-sensitive).
 
-        [Anvil Docs](https://anvil.works/docs/data-tables/data-tables-in-code#searching-and-querying-data-tables)"""
+        [Anvil Docs](https://anvil.works/docs/data-tables/data-tables-in-code#searching-querying-a-table)"""
         ...
     @staticmethod
     def ilike(pattern: str) -> Any:
         """Match using SQL LIKE pattern (case-insensitive).
 
-        [Anvil Docs](https://anvil.works/docs/data-tables/data-tables-in-code#searching-and-querying-data-tables)"""
+        [Anvil Docs](https://anvil.works/docs/data-tables/data-tables-in-code#searching-querying-a-table)"""
         ...
     @staticmethod
     def full_text_match(query: str, raw: bool = False) -> Any:
         """Full-text search.
 
-        [Anvil Docs](https://anvil.works/docs/data-tables/data-tables-in-code#searching-and-querying-data-tables)"""
+        [Anvil Docs](https://anvil.works/docs/data-tables/data-tables-in-code#searching-querying-a-table)"""
         ...
     @staticmethod
     def greater_than(value: Any) -> Any:
         """Match values greater than the given value.
 
-        [Anvil Docs](https://anvil.works/docs/data-tables/data-tables-in-code#searching-and-querying-data-tables)"""
+        [Anvil Docs](https://anvil.works/docs/data-tables/data-tables-in-code#searching-querying-a-table)"""
         ...
     @staticmethod
     def greater_than_or_equal_to(value: Any) -> Any:
         """Match values greater than or equal to the given value.
 
-        [Anvil Docs](https://anvil.works/docs/data-tables/data-tables-in-code#searching-and-querying-data-tables)"""
+        [Anvil Docs](https://anvil.works/docs/data-tables/data-tables-in-code#searching-querying-a-table)"""
         ...
     @staticmethod
     def less_than(value: Any) -> Any:
         """Match values less than the given value.
 
-        [Anvil Docs](https://anvil.works/docs/data-tables/data-tables-in-code#searching-and-querying-data-tables)"""
+        [Anvil Docs](https://anvil.works/docs/data-tables/data-tables-in-code#searching-querying-a-table)"""
         ...
     @staticmethod
     def less_than_or_equal_to(value: Any) -> Any:
         """Match values less than or equal to the given value.
 
-        [Anvil Docs](https://anvil.works/docs/data-tables/data-tables-in-code#searching-and-querying-data-tables)"""
+        [Anvil Docs](https://anvil.works/docs/data-tables/data-tables-in-code#searching-querying-a-table)"""
         ...
     @staticmethod
     def between(min_value: Any, max_value: Any, min_inclusive: bool = True, max_inclusive: bool = False) -> Any:
         """Match values between the given bounds.
 
-        [Anvil Docs](https://anvil.works/docs/data-tables/data-tables-in-code#searching-and-querying-data-tables)"""
+        [Anvil Docs](https://anvil.works/docs/data-tables/data-tables-in-code#searching-querying-a-table)"""
         ...
     @staticmethod
     def not_(value: Any) -> Any:
         """Negate a query condition.
 
-        [Anvil Docs](https://anvil.works/docs/data-tables/data-tables-in-code#searching-and-querying-data-tables)"""
+        [Anvil Docs](https://anvil.works/docs/data-tables/data-tables-in-code#searching-querying-a-table)"""
         ...
 
 q: _Query
@@ -386,10 +386,24 @@ class Transaction:
 
     [Anvil Docs](https://anvil.works/docs/data-tables/transactions)"""
     def __init__(self, relaxed: bool = False) -> None: ...
-    def __enter__(self) -> "Transaction": ...
-    def __exit__(self, exc_type: Any, exc_val: Any, exc_tb: Any) -> bool: ...
+    def __enter__(self) -> "Transaction":
+        """Begin the transaction.
+
+        If a transaction is already open, this block is merged into it:
+        it commits or rolls back with the outermost transaction.
+
+        [Anvil Docs](https://anvil.works/docs/data-tables/transactions)"""
+        ...
+    def __exit__(self, exc_type: Any, exc_val: Any, exc_tb: Any) -> bool:
+        """End the transaction
+
+        [Anvil Docs](https://anvil.works/docs/data-tables/transactions)"""
+        ...
     def abort(self) -> None:
-        """Abort this transaction and roll back all changes.
+        """Abort the transaction this block is part of, and roll back all changes when the outermost transaction ends.
+
+        Raises an error if this block is nested in a transaction opened by a different server call
+        (for example, the server function that called this one), or if this transaction is not open.
 
         [Anvil Docs](https://anvil.works/docs/data-tables/transactions)"""
         ...
@@ -400,7 +414,7 @@ def get_table_by_id(table_id: str) -> Table[Row]:
 
     Only available with Accelerated Data Tables; not available with legacy Data Tables.
 
-    [Anvil Docs](https://anvil.works/docs/data-tables/accelerated-tables)"""
+    [Anvil Docs](https://anvil.works/docs/data-tables/data-tables-in-code)"""
     ...
 
 
@@ -414,3 +428,6 @@ class _AppTables:
     def __iter__(self) -> Iterator[str]: ...
 
 app_tables: _AppTables
+"""Access this app's Data Tables by their Python names.
+
+[Anvil Docs](https://anvil.works/docs/data-tables/data-tables-in-code)"""

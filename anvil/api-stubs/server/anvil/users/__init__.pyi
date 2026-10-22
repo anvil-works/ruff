@@ -10,15 +10,33 @@ from anvil.tables import Row
 from anvil.users import mfa as mfa
 
 # Exceptions (available in both environments)
-class UserExists(Exception): ...
-class AuthenticationFailed(Exception): ...
-class EmailNotConfirmed(AuthenticationFailed): ...
-class AccountIsNotEnabled(AuthenticationFailed): ...
-class TooManyPasswordFailures(AuthenticationFailed): ...
-class PasswordNotAcceptable(Exception): ...
-class MFARequired(AuthenticationFailed): ...
-class MFAException(AuthenticationFailed): ...
-class PasswordResetRequested(Exception): ...
+class UserExists(Exception):
+    """Create a new 'UserExists' object"""
+    ...
+class AuthenticationFailed(Exception):
+    """Create a new 'AuthenticationFailed' object"""
+    ...
+class EmailNotConfirmed(AuthenticationFailed):
+    """Create a new 'EmailNotConfirmed' object"""
+    ...
+class AccountIsNotEnabled(AuthenticationFailed):
+    """Create a new 'AccountIsNotEnabled' object"""
+    ...
+class TooManyPasswordFailures(AuthenticationFailed):
+    """Create a new 'TooManyPasswordFailures' object"""
+    ...
+class PasswordNotAcceptable(Exception):
+    """Create a new 'PasswordNotAcceptable' object"""
+    ...
+class MFARequired(AuthenticationFailed):
+    """Create a new 'MFARequired' object"""
+    ...
+class MFAException(AuthenticationFailed):
+    """Create a new 'MFAException' object"""
+    ...
+class PasswordResetRequested(Exception):
+    """Create a new 'PasswordResetRequested' object"""
+    ...
 
 # Functions available in both environments
 def get_user(allow_remembered: bool = True) -> Row | None:
@@ -40,7 +58,7 @@ def login_with_email(email: str, password: str, remember: bool = False) -> Row |
 
 By default, login status is not remembered between sessions; set remember=True to remember login status.
 
-    [Anvil Docs](https://anvil.works/docs/users/email_login)"""
+    [Anvil Docs](https://anvil.works/docs/users/logging-in-using-code)"""
     ...
 
 def signup_with_email(email: str, password: str, remember: bool = False) -> Row | None:
@@ -48,31 +66,31 @@ def signup_with_email(email: str, password: str, remember: bool = False) -> Row 
 
 By default, login status is not remembered between sessions; set remember=True to remember login status.
 
-    [Anvil Docs](https://anvil.works/docs/users/email_login)"""
+    [Anvil Docs](https://anvil.works/docs/users/logging-in-using-code)"""
     ...
 
 def send_password_reset_email(email_address: str) -> None:
     """Send a password-reset email to the specified user
 
-    [Anvil Docs](https://anvil.works/docs/users/email_login)"""
+    [Anvil Docs](https://anvil.works/docs/users/logging-in-using-code)"""
     ...
 
 def send_token_login_email(email_address: str) -> None:
     """Send a login link email to the specified user
 
-    [Anvil Docs](https://anvil.works/docs/users/email_login)"""
+    [Anvil Docs](https://anvil.works/docs/users/logging-in-using-code)"""
     ...
 
 def reset_password(old_password: str, new_password: str) -> None:
     """Reset the password for the current user
 
-    [Anvil Docs](https://anvil.works/docs/users/email_login)"""
+    [Anvil Docs](https://anvil.works/docs/users/logging-in-using-code)"""
     ...
 
 def send_mfa_reset_email(email_address: str) -> None:
     """Send a two-factor authentication reset email to the specified user.
 
-    [Anvil Docs](https://anvil.works/docs/users/mfa)"""
+    [Anvil Docs](https://anvil.works/docs/users/two-factor-authentication)"""
     ...
 
 def force_login(user_row: Row, remember: bool = False) -> Row | None:

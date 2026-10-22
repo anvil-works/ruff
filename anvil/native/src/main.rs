@@ -2,18 +2,18 @@
 mod callables;
 mod checks;
 mod dependencies;
-mod dom;
 mod environments;
 mod forms;
 mod handles;
 mod imports;
-mod models;
+use anvil_ty_compat::models;
 mod policy;
-mod services;
+use anvil_ty_compat::services;
 mod suppressions;
 mod system;
-mod tables;
+use anvil_ty_compat::tables;
 
+use anvil_ty_compat::{Source, identifier};
 use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -46,33 +46,9 @@ struct Args {
     files: Vec<PathBuf>,
 }
 
-struct Source {
-    path: PathBuf,
-    relative: PathBuf,
-    text: String,
-}
-
-fn identifier(value: &str) -> bool {
-    let mut chars = value.chars();
-    chars
-        .next()
-        .is_some_and(|c| c == '_' || c.is_ascii_alphabetic())
-        && chars.all(|c| c == '_' || c.is_ascii_alphanumeric())
-}
-
 fn yaml(path: &Path) -> Result<Value> {
     serde_yaml::from_str(&fs::read_to_string(path)?)
         .with_context(|| format!("parsing {}", path.display()))
-}
-
-fn populated(value: &Value) -> bool {
-    match value {
-        Value::Null => false,
-        Value::Array(items) => !items.is_empty(),
-        Value::Object(items) => !items.is_empty(),
-        Value::Bool(value) => *value,
-        _ => true,
-    }
 }
 
 fn sources(root: &Path) -> Result<Vec<Source>> {
@@ -284,7 +260,11 @@ fn validate(app: &Path, files: &[PathBuf]) -> Result<Vec<Value>> {
             [].iter()
         }) {
             let path = code.join(utf8(&source.relative)?);
-            mount(&fs, &path, &source.text)?;
+            mount(
+                &fs,
+                &path,
+                &models::analysis_source(&source.text, &config["db_schema"]),
+            )?;
             // Anvil's Pyright resolver permits package-local absolute fallback
             // before reporting its runtime restriction. ty's existing fallback
             // includes package directories carrying project metadata.
@@ -336,7 +316,11 @@ fn validate(app: &Path, files: &[PathBuf]) -> Result<Vec<Value>> {
         fs.create_directory_all(&checkout)?;
         for source in &client {
             let path = checkout.join(utf8(&source.relative)?);
-            mount(&fs, &path, &source.text)?;
+            mount(
+                &fs,
+                &path,
+                &models::analysis_source(&source.text, &config["db_schema"]),
+            )?;
             origins.insert(path, source.path.clone());
         }
         for (relative, stub) in &forms {
@@ -351,7 +335,11 @@ fn validate(app: &Path, files: &[PathBuf]) -> Result<Vec<Value>> {
                 [].iter()
             }) {
                 let path = code.join(utf8(&source.relative)?);
-                mount(&fs, &path, &source.text)?;
+                mount(
+                    &fs,
+                    &path,
+                    &models::analysis_source(&source.text, &config["db_schema"]),
+                )?;
                 origins.insert(path, source.path.clone());
             }
             if !fs.is_file(code.join("__init__.py")) {

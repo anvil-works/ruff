@@ -57,7 +57,7 @@ def none_of(*query_expressions: Any, **kwargs: Any) -> Any:
     """Match none of the query parameters given as arguments and keyword arguments."""
     ...
 
-def not_(value: Any, /) -> Any:
+def not_(*query_expressions: Any, **kwargs: Any) -> Any:
     """Match none of the query parameters given as arguments and keyword arguments."""
     ...
 
@@ -74,7 +74,7 @@ def fetch_only(*only_cols: str, **linked_cols: Any) -> Any:
         linked_cols: Linked columns to fetch, specified as keyword arguments.
             Each value must be another fetch_only() object.
 
-    [Anvil Docs](https://anvil.works/docs/data-tables/accelerated-tables#explicit-cache-control)"""
+    [Anvil Docs](https://anvil.works/docs/data-tables/data-tables-in-code#explicit-cache-control)"""
     ...
 
 def only_cols(*cols: str) -> Any:
@@ -84,5 +84,5 @@ def only_cols(*cols: str) -> Any:
         cols: Column names to make accessible in the view.
             Example: only_cols('email', 'enabled')
 
-    [Anvil Docs](https://anvil.works/docs/data-tables/accelerated-tables#column-restricted-views)"""
+    [Anvil Docs](https://anvil.works/docs/data-tables/data-tables-in-code#column-restricted-views)"""
     ...

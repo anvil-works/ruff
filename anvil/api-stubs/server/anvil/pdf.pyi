@@ -12,7 +12,7 @@ from anvil import Media
 class PDFRenderer:
     """Configure options for PDF rendering. Returns an object with a render_form() method.
 
-    [Anvil Docs](https://anvil.works/docs/media/creating_pdfs)"""
+    [Anvil Docs](https://anvil.works/docs/other-concepts/creating-pdf-files)"""
 
     def __init__(
         self,
@@ -57,5 +57,5 @@ def render_form(form_name: str, *args: Any, **kwargs: Any) -> Media:
 
     Returns a PDF as an Anvil Media object.
 
-    [Anvil Docs](https://anvil.works/docs/working-with-files/creating-pdf-files)"""
+    [Anvil Docs](https://anvil.works/docs/other-concepts/creating-pdf-files)"""
     ...

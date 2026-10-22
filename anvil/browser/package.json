@@ -1,0 +1,21 @@
+{
+  "name": "@anvil-works/anvil-ty-browser",
+  "version": "0.1.0-canary.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build:comlink": "node build-comlink.mjs",
+    "build:stubs": "node build-stub-packs.mjs",
+    "build:wasm": "wasm-pack build ../../crates/ty_wasm --dev --target web --out-dir ../../anvil/browser/dist/wasm",
+    "build:compat": "node build-stub-packs.mjs && wasm-pack build ../compat --release --target web --out-dir ../browser/dist/compat -- --features browser",
+    "test": "node --test tests/*.test.mjs",
+    "prepare": "node build-comlink.mjs && node build-stub-packs.mjs"
+  },
+  "dependencies": {
+    "comlink": "^4.4.2"
+  },
+  "devDependencies": {
+    "@anvil-works/python-stubs": "file:../../../anvil-python-stubs/.packages/anvil-works-python-stubs-0.1.0-canary.1.tgz",
+    "@playwright/test": "^1.63.0"
+  }
+}

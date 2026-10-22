@@ -68,9 +68,27 @@ dependencies = [
 ]
 
 [[package]]
+name = "anvil-ty-compat"
+version = "0.1.0-canary.0"
+dependencies = [
+ "anyhow",
+ "ruff_python_ast",
+ "ruff_python_parser",
+ "ruff_python_stdlib",
+ "ruff_source_file",
+ "ruff_text_size",
+ "scraper",
+ "serde",
+ "serde_json",
+ "serde_yaml",
+ "walkdir",
+]
+
+[[package]]
 name = "anvil-ty-native"
 version = "0.1.0-canary.0"
 dependencies = [
+ "anvil-ty-compat",
  "anyhow",
  "clap",
  "globset",
@@ -82,7 +100,6 @@ dependencies = [
  "ruff_ranged_value",
  "ruff_source_file",
  "ruff_text_size",
- "scraper",
  "serde_json",
  "serde_yaml",
  "toml",

@@ -1,9 +1,15 @@
 # Upstream engine compatibility
 
-Anvil validation uses upstream ty without local engine patches. All sources and
-tests under `crates/` match `main`; verify with `git diff main -- crates`.
-Anvil support lives in the adapter, generated declarations and API stubs under
-`anvil/`.
+Anvil uses upstream ty inference and diagnostics. Anvil-specific support lives
+in the adapter, generated declarations and API stubs under `anvil/`.
+
+The sole engine extension exposes `active_parameter_expects_callable` on WASM
+signature help. The semantic helper uses native alias expansion, materialisation
+and callable conversion; it changes no inference rules. This lets completion
+insert a callback reference without `()`, including for ordinary Python APIs.
+Keep this generic API extension separate from Anvil compatibility logic and
+remove the local difference if an equivalent upstream API becomes available.
+Review engine differences with `git diff main -- crates`.
 
 ## Accepted typing limitations
 
@@ -33,3 +39,13 @@ preserves the input component class. It needs no engine change.
 `anvil/tests/test_engine_patterns.py` checks inherited members and rejects an
 instance argument through the real CLI. Arbitrary dynamic Python class bases
 retain ordinary ty behaviour.
+
+## Browser filesystem revisions
+
+The upstream WASM filesystem uses millisecond timestamps for file and directory
+revisions. The adapter closes and reopens changed files so several inference
+snapshots within one tick cannot retain stale source. Generated Form item types
+live in one module mounted before the first query; updating it avoids discovery
+of newly created sibling modules within a cached directory. Tests freeze the
+worker clock across inference, producer edits and restoration. No engine patch
+or production clock override is required.

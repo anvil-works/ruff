@@ -100,7 +100,7 @@ def get_user_files() -> Folder:
 class _AppFiles:
     """Container for Google Drive app files.
 
-    [Anvil Docs](https://anvil.works/docs/integrations/google/google-drive#app-files)"""
+    [Anvil Docs](https://anvil.works/docs/integrations/google/google-drive#drive-app-files)"""
     ...
 
 app_files: _AppFiles = ...

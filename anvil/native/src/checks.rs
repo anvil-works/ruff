@@ -15,114 +15,6 @@ use serde_json::{Value, json};
 use ty_project::ProjectDatabase;
 use ty_python_semantic::{Db as SemanticDb, SemanticModel};
 
-// Ported from anvil-pyright/src/anvil/skulptModules.ts. This is the existing
-// runtime policy (known stdlib minus the supported set), not Python's stdlib list.
-const UNSUPPORTED_SKULPT: &[&str] = &[
-    "os",
-    "subprocess",
-    "socket",
-    "threading",
-    "multiprocessing",
-    "sqlite3",
-    "pathlib",
-    "shutil",
-    "tempfile",
-    "glob",
-    "fnmatch",
-    "io",
-    "struct",
-    "codecs",
-    "csv",
-    "configparser",
-    "argparse",
-    "logging",
-    "unittest",
-    "doctest",
-    "pdb",
-    "profile",
-    "timeit",
-    "trace",
-    "abc",
-    "contextlib",
-    "decimal",
-    "numbers",
-    "cmath",
-    "statistics",
-    "secrets",
-    "hashlib",
-    "hmac",
-    "ssl",
-    "http",
-    "xmlrpc",
-    "ftplib",
-    "poplib",
-    "imaplib",
-    "smtplib",
-    "email",
-    "html",
-    "xml",
-    "webbrowser",
-    "cgi",
-    "wsgiref",
-    "asyncio",
-    "concurrent",
-    "select",
-    "selectors",
-    "mmap",
-    "ctypes",
-    "pickle",
-    "shelve",
-    "marshal",
-    "dbm",
-    "gzip",
-    "bz2",
-    "lzma",
-    "zipfile",
-    "tarfile",
-    "zlib",
-    "copy",
-    "pprint",
-    "textwrap",
-    "difflib",
-    "enum",
-    "dataclasses",
-    "weakref",
-    "inspect",
-    "dis",
-    "importlib",
-    "pkgutil",
-    "modulefinder",
-    "ast",
-    "symtable",
-    "token",
-    "tokenize",
-    "compileall",
-    "sysconfig",
-    "site",
-    "venv",
-    "ensurepip",
-    "distutils",
-    "setuptools",
-    "warnings",
-    "traceback",
-    "atexit",
-    "gc",
-    "resource",
-    "posixpath",
-    "ntpath",
-    "posix",
-    "nt",
-    "gettext",
-    "locale",
-    "base64",
-    "binascii",
-    "quopri",
-    "uu",
-    "queue",
-    "heapq",
-    "bisect",
-];
-
 pub(crate) fn issue(
     db: &dyn Db,
     file: File,
@@ -174,7 +66,7 @@ impl Imports<'_> {
             ));
             return;
         }
-        if self.client && UNSUPPORTED_SKULPT.contains(&name.split('.').next().unwrap()) {
+        if self.client && !anvil_ty_compat::skulpt::module_supported(name) {
             self.issues.push(issue(
                 self.db, self.file, self.origin, range,
                 "reportAnvilUnsupportedSkulptImport", "error",
@@ -213,15 +105,19 @@ impl<'ast> Visitor<'ast> for Imports<'_> {
             Stmt::ImportFrom(import) if import.level == 0 => {
                 if let Some(module) = &import.module {
                     self.check(module.as_str(), module.range());
-                    // A namespace package has no source file to establish ownership.
-                    // Its imported children do, e.g. `from server_code import Secret`.
-                    if self
+                    // Resolve imported children as modules before applying module
+                    // restrictions; ordinary exports (e.g. namedtuple) are not modules.
+                    let namespace = self
                         .model
                         .resolve_module(Some(module.as_str()), 0)
-                        .is_some_and(|module| module.file(self.model.db()).is_none())
-                    {
-                        for alias in &import.names {
-                            self.check(&format!("{module}.{}", alias.name), alias.name.range());
+                        .is_some_and(|module| module.file(self.model.db()).is_none());
+                    for alias in &import.names {
+                        let child = format!("{module}.{}", alias.name);
+                        if namespace
+                            || anvil_ty_compat::skulpt::module_supported(module.as_str())
+                                && self.model.resolve_module(Some(&child), 0).is_some()
+                        {
+                            self.check(&child, alias.name.range());
                         }
                     }
                 }

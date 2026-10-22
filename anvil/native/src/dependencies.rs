@@ -1,20 +1,17 @@
 //! Resolve declared apps from the local cache, following anvil-pyright's two passes.
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
-use anyhow::{Result, ensure};
+use anyhow::Result;
 use serde_json::Value;
 
-pub(crate) struct Dependency {
-    pub(crate) root: PathBuf,
-    pub(crate) package: String,
-    pub(crate) ids: Vec<String>,
-}
+pub(crate) use anvil_ty_compat::dependencies::Dependency;
 
 pub(crate) fn resolve(app: &Path, config: &Value) -> Result<Vec<Dependency>> {
-    let Some(declared) = config["dependencies"]
+    if config["dependencies"]
         .as_array()
         .filter(|items| !items.is_empty())
-    else {
+        .is_none()
+    {
         return Ok(Vec::new());
     };
     let Ok(entries) = std::fs::read_dir(app.join(".anvil/deps")) else {
@@ -37,53 +34,5 @@ pub(crate) fn resolve(app: &Path, config: &Value) -> Result<Vec<Dependency>> {
             })
         })
         .collect();
-    let mut used = vec![false; cached.len()];
-    let mut matched = Vec::new();
-    let mut legacy = Vec::new();
-    for dependency in declared {
-        let hint = dependency["resolution_hints"]["package_name"].as_str();
-        let index = hint.and_then(|hint| {
-            // The baseline's lookup maps retain the last duplicate package name.
-            cached
-                .iter()
-                .rposition(|item| item.package == hint)
-                .filter(|index| !used[*index])
-                .or_else(|| {
-                    cached
-                        .iter()
-                        .position(|item| item.root.file_name().is_some_and(|name| name == hint))
-                        .filter(|index| !used[*index])
-                })
-        });
-        if let Some(index) = index {
-            used[index] = true;
-            matched.push((index, dependency));
-        } else {
-            legacy.push(dependency);
-        }
-    }
-    for dependency in legacy {
-        if let Some(index) = used.iter().position(|used| !used) {
-            used[index] = true;
-            matched.push((index, dependency));
-        }
-    }
-    let mut cached: Vec<_> = cached.into_iter().map(Some).collect();
-    matched
-        .into_iter()
-        .map(|(index, declared)| {
-            let mut dependency = cached[index]
-                .take()
-                .expect("each cache entry is consumed once");
-            dependency.ids = ["dep_id", "app_id"]
-                .into_iter()
-                .filter_map(|key| declared[key].as_str().map(str::to_owned))
-                .collect();
-            ensure!(
-                crate::identifier(&dependency.package),
-                "dependency package_name must be a Python identifier"
-            );
-            Ok(dependency)
-        })
-        .collect()
+    anvil_ty_compat::dependencies::select(config, cached)
 }

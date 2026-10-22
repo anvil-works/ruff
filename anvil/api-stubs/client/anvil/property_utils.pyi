@@ -4,7 +4,7 @@
 #
 """Utilities for working with custom component property values.
 
-[Anvil Docs](https://anvil.works/docs/client/advanced-layouts/component-api/property-utils-module)"""
+[Anvil Docs](https://anvil.works/docs/client/forms/advanced-layouts/component-api/property-utils-module)"""
 
 from typing import Any, Callable, Literal, Mapping, Protocol
 
@@ -35,7 +35,7 @@ PropertyType = Literal[
 class anvil_property(property):
     """Define custom component properties.
 
-    [Anvil Docs](https://anvil.works/docs/client/advanced-layouts/component-api)"""
+    [Anvil Docs](https://anvil.works/docs/client/forms/advanced-layouts/component-api)"""
 
     def __init__(self, type: PropertyType, /, **descriptors: Any) -> None: ...
     def __call__(self, fget: Callable[..., Any], /) -> "anvil_property": ...
@@ -60,28 +60,28 @@ def get_form_constructor(
 ) -> InstantiatorFunction | None:
     """Resolve a form property value to a constructor function.
 
-    [Anvil Docs](https://anvil.works/docs/client/advanced-layouts/component-api/property-utils-module)"""
+    [Anvil Docs](https://anvil.works/docs/client/forms/advanced-layouts/component-api/property-utils-module)"""
     ...
 
 
 def get_margin_styles(margin: MarginPropertyValue) -> Mapping[str, str]:
     """Convert a margin property value into CSS style fragments.
 
-    [Anvil Docs](https://anvil.works/docs/client/advanced-layouts/component-api/property-utils-module)"""
+    [Anvil Docs](https://anvil.works/docs/client/forms/advanced-layouts/component-api/property-utils-module)"""
     ...
 
 
 def get_padding_styles(padding: PaddingPropertyValue) -> Mapping[str, str]:
     """Convert a padding property value into CSS style fragments.
 
-    [Anvil Docs](https://anvil.works/docs/client/advanced-layouts/component-api/property-utils-module)"""
+    [Anvil Docs](https://anvil.works/docs/client/forms/advanced-layouts/component-api/property-utils-module)"""
     ...
 
 
 def get_spacing_styles(spacing: SpacingPropertyValue) -> Mapping[str, str]:
     """Convert a spacing property value into CSS style fragments.
 
-    [Anvil Docs](https://anvil.works/docs/client/advanced-layouts/component-api/property-utils-module)"""
+    [Anvil Docs](https://anvil.works/docs/client/forms/advanced-layouts/component-api/property-utils-module)"""
     ...
 
 

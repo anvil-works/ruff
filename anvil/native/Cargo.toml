@@ -7,6 +7,7 @@ publish = false
 [workspace]
 
 [dependencies]
+anvil-ty-compat = { path = "../compat" }
 anyhow = "1"
 clap = { version = "4", features = ["derive"] }
 globset = { version = "0.4", default-features = false }
@@ -18,7 +19,6 @@ ruff_python_parser = { path = "../../crates/ruff_python_parser" }
 ruff_ranged_value = { path = "../../crates/ruff_ranged_value" }
 ruff_source_file = { path = "../../crates/ruff_source_file" }
 ruff_text_size = { path = "../../crates/ruff_text_size" }
-scraper = { version = "0.27.0", default-features = false }
 serde_json = "1"
 serde_yaml = "0.9"
 toml = { version = "1", default-features = false, features = ["display", "parse", "serde", "std"] }
