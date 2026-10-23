@@ -261,3 +261,29 @@ test('a failed Plotly fetch leaves edits and server completion usable and retrie
     assert.equal(result.revision, 2);
     assert.equal(requests, 2);
 }));
+
+test('removing server library requirements reports unavailable imports without false member errors', () => withBrowser(async page => {
+    const result = await page.evaluate(async () => {
+        const { BrowserAnalysisSession } = await import('/session.mjs');
+        const uri = 'file:///app/server_code/main.py';
+        const config = { package_name: 'Main', runtime_options: { server_spec: { requirements: '' } } };
+        const session = new BrowserAnalysisSession({ workerUrl: '/worker.mjs', rootUri: 'file:///app', files: {
+            '/app/anvil.yaml': JSON.stringify(config), '/app/client_code/__init__.py': '',
+            '/app/server_code/main.py': 'import numpy as np\nimport pandas as pd\nnp.array([1, 2])\npd.DataFrame()\n',
+        } });
+        const result = [];
+        try {
+            for (const requirements of ['', 'numpy==2.5.4\npandas==3.1.0\n', '', 'numpy==2.5.4\npandas==3.1.0\n']) {
+                config.runtime_options.server_spec.requirements = requirements;
+                await session.updateFiles({ '/app/anvil.yaml': JSON.stringify(config) });
+                result.push((await session.query('textDocument/diagnostic', { textDocument: { uri } })).result.items);
+            }
+            return result;
+        } finally { session.dispose(); }
+    });
+    for (const index of [0, 2]) {
+        assert(!result[index].some(item => item.code === 'unresolved-attribute'), JSON.stringify({ index, diagnostics: result[index] }));
+        assert.equal(result[index].filter(item => item.code === 'unresolved-import' && item.severity === 3).length, 2, JSON.stringify(result[index]));
+    }
+    for (const index of [1, 3]) assert.deepEqual(result[index], []);
+}));

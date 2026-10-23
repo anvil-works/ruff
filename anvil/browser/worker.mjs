@@ -340,14 +340,15 @@ function prepareApp(server = isServer, items = formItems) {
         for (let directory = path.slice(0, path.lastIndexOf('/')); directory; directory = directory.slice(0, directory.lastIndexOf('/')))
             directories.add(directory);
     }
-    // ty's WASM file API refreshes a file's parent, but not newly created ancestor
-    // directories. Rebuild for new directories in the current search roots so a
-    // previously unresolved package can become importable. Ordinary edits stay incremental.
-    if (roots === preparedRootsJson && [...directories].some(path => !workspaceDirectories.has(path))) resetWorkspace();
+    // ty's WASM file API leaves ancestor directories behind when files are removed
+    // and does not refresh newly created ancestors. Rebuild when the directory set
+    // changes so removed packages cannot resolve as empty namespaces. Ordinary edits stay incremental.
+    if (roots === preparedRootsJson && (directories.size !== workspaceDirectories.size ||
+        [...directories].some(path => !workspaceDirectories.has(path)))) resetWorkspace();
     for (const path of mounted.keys()) if (!next.has(path)) setFile(path, null);
     for (const [path, text] of next) if (mounted.get(path) !== text) setFile(path, text);
     mounted = next;
-    for (const directory of directories) workspaceDirectories.add(directory);
+    workspaceDirectories = directories;
     const environment = JSON.parse(current.get(`${root}/.anvil/python-environment.json`) ?? '{}');
     const options = { ...userOptions, environment: { 'python-version': server ? environment.server ?? '3.10' : '3.7', root: prepared.roots },
         analysis: { 'return-type-inference': 'always', ...userOptions.analysis } };
@@ -1982,7 +1983,7 @@ function request(method, params) {
                     position.line === item.range.start.line && position.character === item.range.start.character));
                 if (!imported?.module || imported.relative || imported.stdlib || appPackages.has(imported.module.split('.')[0])) continue;
                 item.severity = 3;
-                item.message = `Type information for server module '${imported.module}' is unavailable in the IDE. Check that it is installed in your server environment; its types will remain unknown here.`;
+                item.message = `Type information for server module '${imported.module}' is unavailable in the IDE. Autocomplete and type checking for this module are limited.`;
             }
         }
         if (!isServer && sourceEnvironments.size && path.endsWith('.py')) {

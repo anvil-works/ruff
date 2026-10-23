@@ -21,7 +21,7 @@ packages:
   "@anvil-works/python-stubs@0.1.0-canary.1":
     resolution:
       {
-        integrity: sha512-AxeXfQPTeNfymwMr51dfmMwEDQQtIiJFKoP6OCBPfMdpp/XXGNPAfjx4PU+S5gz7J98t8QiTZb9+cag1qQ7blA==,
+        integrity: sha512-tdko1/Lln6JgQZu25oOldApZzq6iskmUrngQJldiz0LDNirz4in+nHANxxglhosxPM/1O/T0d2gN0tiD6xxgQA==,
       }
 
   "@playwright/test@1.64.1":

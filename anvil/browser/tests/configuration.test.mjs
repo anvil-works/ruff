@@ -36,9 +36,9 @@ test('missing external server typing is informational while app and stdlib impor
     const result = await page.evaluate(async () => {
         const { BrowserAnalysisSession } = await import('/session.mjs');
         const server = 'file:///app/server_code/main.py';
-        const source = 'import requests\nfrom PIL import Image\nfrom .missing import helper\nimport Main.missing\nimport tomllib\ndef greet(name: str): pass\ngreet(42)\n';
+        const source = 'import requests\nfrom PIL import Image\nfrom .missing import helper\nimport Main.missing\nimport tomllib\ndef greet(name: str): pass\ngreet(42)\nimport arrow\n';
         const session = new BrowserAnalysisSession({ workerUrl: '/worker.mjs', rootUri: 'file:///app', files: {
-            '/app/anvil.yaml': 'package_name: Main\n', '/app/client_code/__init__.py': '',
+            '/app/anvil.yaml': 'package_name: Main\nruntime_options:\n  server_spec:\n    requirements: arrow\n', '/app/client_code/__init__.py': '',
             '/app/server_code/main.py': source,
             '/app/.anvil/python-environment.json': JSON.stringify({ server: '3.10' }),
         } });
@@ -47,14 +47,15 @@ test('missing external server typing is informational while app and stdlib impor
             const defaults = await diagnostics();
             await session.updateFiles({ '/app/ty.toml': '[rules]\nunresolved-import = "error"\n' });
             const strict = await diagnostics();
-            await session.updateFiles({ '/app/ty.toml': '[analysis]\nallowed-unresolved-imports = ["requests.**", "PIL.**"]\n' });
+            await session.updateFiles({ '/app/ty.toml': '[analysis]\nallowed-unresolved-imports = ["requests.**", "PIL.**", "arrow.**"]\n' });
             return { defaults, strict, allowed: await diagnostics() };
         } finally { session.dispose(); }
     });
-    for (const line of [0, 1]) {
+    for (const line of [0, 1, 7]) {
         const item = result.defaults.find(item => item.range.start.line === line);
         assert.equal(item?.severity, 3, JSON.stringify(result.defaults));
         assert.match(item.message, /type information.*unavailable/i);
+        assert.doesNotMatch(item.message, /check.*install/i);
         assert.equal(result.strict.find(item => item.range.start.line === line)?.severity, 1);
         assert(!result.allowed.some(item => item.range.start.line === line));
     }
