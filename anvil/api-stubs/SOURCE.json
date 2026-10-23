@@ -1,8 +1,8 @@
 {
   "repository": "https://github.com/anvil-works/anvil",
-  "revision": "0a6cfe64a494119e669edcae3e615dee1e16d97f",
+  "revision": "d8d8bcad488fcfa990f0351fe008ff52a77f7dc3",
   "files": {
-    "anvil/__init__.pyi": "5304257572e24049869c7c6dfdb7c5d364eccdd92832f8c2870ab676d2093e5e",
+    "anvil/__init__.pyi": "a60b129c3e3389cd69af1d307e8dc83e0fd34a968ee0e0bd575fa00e685d64e6",
     "anvil/designer.pyi": "6f1bf4ae07452b7b0d3a92f6ab19b2aa6d0ced7b6c27afdc8a30520a8cf54d52",
     "anvil/email.pyi": "e1eddf6666966d162e0b19d738012c8eddfefa3739f45e86e9d73cc30e5bb7e5",
     "anvil/facebook/__init__.pyi": "c0e7dc9c87e7f55c643f6d139d658d846e852039f34d2213a3e097b51efb2a43",
@@ -29,7 +29,7 @@
     "anvil/saml/auth.pyi": "b1421f2b2d8f431062bbf7d754fb117268b72f87bdb24d5ae4df94ae995201f0",
     "anvil/script.pyi": "4c59ea82193a9e5dc5d15a062729be924cc5982d43aad9c541428dd4e8ce18b7",
     "anvil/secrets.pyi": "6f4ac488faa2d8b37222de9d81b02bd01b49915f077f06930f72760d635eca41",
-    "anvil/server.pyi": "55dd38be98515d9f4c3218c0266978a0d614ed593a80bdee7da165d244a82d4c",
+    "anvil/server.pyi": "86f1eef0045f74094e5e33a82159fc8aea7dba38c1506367f24c10263a0e9d3a",
     "anvil/stripe.pyi": "89d7fb384fc38dd18afe34fc379cea615b3f566b0da588b4089aced47a6960da",
     "anvil/tables/__init__.pyi": "121d868666bf4156e1bf53feaef488babf14db2b90e78693d81ac2ce71cb0ed7",
     "anvil/tables/query.pyi": "4b3cf938337df1abd3e9569721c9dbbdd2ce7a84224f3f60fe0eb39b37641137",
@@ -40,9 +40,9 @@
     "stripe/checkout.pyi": "483c8216963cd6d8db162cf2e95dc63e65b7032f1d10c3a4a4a469d223178a59"
   },
   "inputs": {
-    "doc/dist/index.json": "87314fab058e7d2286a9f60f10129c2a8189c6e2326c4b7556edc28f6d7e4d9a",
+    "doc/dist/index.json": "f764473774572c86d0aba78ec0f814c1705272529b336e16103da27d741a12df",
     "doc/anvil-api-stubs/generate-stubs.mjs": "3bc3aa1fba1e3fa5f328c40a6d23e56161a201bc5d4baee327ce53594cd8a424",
-    "doc/anvil-api-stubs/stub_documentation.py": "39809fa7eea2f46bc0c4da170dd81ba2953486bcf03535ce557d9f002fe64578",
+    "doc/anvil-api-stubs/stub_documentation.py": "de67507573bceda189a49724be31e054f2a360fe37496f966af5d2670c353498",
     "doc/anvil-api-stubs/plotly-stubs.mjs": "47aa0a7ec6831e6a35649e8b1074a7f4e0a0ec3107b4a75187ec94a596129b32",
     "doc/anvil-api-stubs/completion-preferences.mjs": "babec3275d5f7bf42b1e6c64296932a96dc8a7a3d5c239f09f00609d3a11ed59",
     "doc/anvil-api-stubs/completion-priorities.json": "9f8f8c48218f17e9d712f6d073cae445e71b2f1dbdcfd5635997b6de370117fb",

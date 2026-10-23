@@ -211,7 +211,7 @@ def background_task(fn_or_name: _CallableT | str | None = None) -> _CallableT | 
 def launch_background_task(task_name: str, /, *args: Any, **kwargs: Any) -> BackgroundTaskState[Any]:
     """Launch a background task by name.
 
-    [Anvil Docs](https://anvil.works/docs/server/background-tasks)"""
+    [Anvil Docs](https://anvil.works/docs/server/background-tasks/defining-and-running)"""
     ...
 
 # Run a script and wait for its result

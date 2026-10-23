@@ -26,14 +26,16 @@ for (const pack of serverPacks) {
     await writePack(pack.id, source, { server: true, modules: pack.modules, version: pack.version, dependencies: pack.dependencies });
 }
 // Licence notices travel with the browser assets, not just the build inputs.
-for (const filename of await readdir(new URL('LICENSES/', serverManifest))) {
+const licences = await readdir(new URL('LICENSES/', serverManifest));
+for (const filename of licences) {
     await writeFile(new URL(filename, output), await readFile(new URL(`LICENSES/${filename}`, serverManifest)));
 }
 await writeFile(new URL('./dist/stub-packs.mjs', import.meta.url),
     `export const stubPacks = ${JSON.stringify(packs)}.map(pack => ({...pack, url: new URL(pack.url, import.meta.url)}));\n` +
     `export const completionPreferences = ${await readFile(new URL('../api-stubs/completion-preferences.json', import.meta.url), 'utf8')};\n`);
 for (const previous of await readdir(output)) {
-    if (!packs.some(pack => pack.url === `./stubs/${previous}`) && /-[a-f0-9]{64}\.json$/.test(previous)) {
+    if ((!packs.some(pack => pack.url === `./stubs/${previous}`) && /-[a-f0-9]{64}\.json$/.test(previous)) ||
+        (previous.endsWith('.txt') && !licences.includes(previous))) {
         await rm(new URL(previous, output));
     }
 }

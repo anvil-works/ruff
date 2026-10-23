@@ -10,16 +10,21 @@ module from this directory:
 
 ```sh
 pnpm install --frozen-lockfile
-pnpm build:wasm
-pnpm build:compat
+pnpm build
 pnpm test
 ```
 
-Installation prepares the Comlink ES module, source map, licence and optional
-stub packs under `dist/`. `pnpm build:comlink` refreshes Comlink assets;
-`pnpm build:stubs` refreshes stub packs without rebuilding WASM. The compatibility
-build also refreshes stub packs. Serve the entire `dist/` directory alongside the
-worker and session; the IDE's existing copy includes these assets.
+`pnpm build` prepares Comlink, lazy packs and both WASM modules in release mode
+with locked Cargo dependencies. `dist/BUILD.json` records source revisions and
+input/output hashes. `pnpm pack` verifies that the inputs and assets still match
+that build; rerun the build after source changes. `pnpm build:comlink` and
+`pnpm build:stubs` refresh those assets during development; `pnpm build:wasm` is
+the faster development-only engine build. Run the full release build before packing.
+
+The published package contains the session, worker and complete `dist/` assets,
+including both WASM binaries and licence notices. Consumers need no Rust, Python
+or install scripts. Serve the package contents with JavaScript and WebAssembly
+MIME types. The IDE copies them beneath a versioned URL for cache reuse.
 
 Client Plotly declarations live in a content-hashed JSON pack. Only the package
 root ships in compatibility WASM, so import completion can discover it without
@@ -110,11 +115,10 @@ disabled only for app editors using semantic analysis. Explicit Ruff config is
 preserved, as are normal Ruff checks with the feature flag off or in extra Python
 files. Distinct Ty errors on one line are retained.
 
-The initial local integration uses its packed tarball from the sibling checkout.
-Run `pnpm pack --pack-destination .packages` there before installing this package.
-After registry publication, replace the local tarball dependency with the exact
-published version and regenerate this lockfile before updating the IDE's adapter
-pin. The IDE continues to pin the previous adapter until that publication step.
+The build pins `@anvil-works/python-stubs@0.1.0-canary.1` from npm. Publish that
+reviewed package before running a clean hosted browser build. The browser workflow
+builds and tests the installed archive, then uploads it for review; it never
+publishes to npm. See [publication order](../PUBLISHING.md#ide-browser-assets).
 
 Serve this directory with JavaScript and WebAssembly MIME types. Create a
 `BrowserAnalysisSession` from `session.mjs`, passing the URL of `worker.mjs`, a

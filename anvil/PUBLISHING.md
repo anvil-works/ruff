@@ -12,13 +12,26 @@ finished after the checker exists on npm.
 
 ## IDE browser assets
 
-This guide publishes native validation packages. It does not deliver the IDE's
-browser assets. The private [browser package](browser/README.md) currently consumes
-an unpublished local Python-stub archive. Before an IDE release, provide a pinned,
-resolvable stub package and build both WASM modules in release mode with locked
-dependencies. The IDE build must copy the session, worker and complete `dist/`
-assets, including lazy packs and licence notices. The native release workflow
-does not perform that delivery.
+Publish in this order, using the reviewed archives:
+
+1. Publish `@anvil-works/python-stubs@0.1.0-canary.1` from the Python-stub
+    repository. The browser build consumes this exact version.
+1. From a clean checkout of the browser source, run `pnpm install --frozen-lockfile`
+    in `anvil/browser`, then `pnpm build` and `pnpm test`. Both WASM modules must
+    use release mode. Pack outside the source checkout with
+    `pnpm pack --pack-destination "$(mktemp -d)"`.
+1. Inspect `dist/BUILD.json`: it must name the reviewed source revision and have
+    `sourceDirty: false`. Publish that archive as
+    `@anvil-works/anvil-ty-browser@0.1.0-canary.0` with the `canary` tag.
+1. Install the exact published browser version in Anvil and regenerate its
+    lockfile against npm. Run the frontend and completion-performance CI checks
+    before merging. Keep the `ty-analysis` account flag off by default.
+
+The browser workflow builds both WASM modules, tests the installed package in
+Chrome and uploads an npm archive. It has no npm credentials and never publishes.
+The IDE copies the installed package, including lazy packs and licence notices,
+under a versioned URL. Its Docker build needs neither Rust nor a sibling checkout.
+The native validation workflow remains separate.
 
 ## Native release snapshot — 20 October 2026
 

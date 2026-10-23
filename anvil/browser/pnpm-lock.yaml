@@ -6,26 +6,23 @@ settings:
 
 importers:
   .:
-    dependencies:
-      comlink:
-        specifier: ^4.4.2
-        version: 4.4.2
     devDependencies:
       "@anvil-works/python-stubs":
-        specifier: file:../../../anvil-python-stubs/.packages/anvil-works-python-stubs-0.1.0-canary.1.tgz
-        version: file:../../../anvil-python-stubs/.packages/anvil-works-python-stubs-0.1.0-canary.1.tgz
+        specifier: 0.1.0-canary.1
+        version: 0.1.0-canary.1
       "@playwright/test":
         specifier: ^1.63.0
         version: 1.64.1
+      comlink:
+        specifier: ^4.4.2
+        version: 4.4.2
 
 packages:
-  "@anvil-works/python-stubs@file:../../../anvil-python-stubs/.packages/anvil-works-python-stubs-0.1.0-canary.1.tgz":
+  "@anvil-works/python-stubs@0.1.0-canary.1":
     resolution:
       {
         integrity: sha512-AxeXfQPTeNfymwMr51dfmMwEDQQtIiJFKoP6OCBPfMdpp/XXGNPAfjx4PU+S5gz7J98t8QiTZb9+cag1qQ7blA==,
-        tarball: file:../../../anvil-python-stubs/.packages/anvil-works-python-stubs-0.1.0-canary.1.tgz,
       }
-    version: 0.1.0-canary.1
 
   "@playwright/test@1.64.1":
     resolution:
@@ -58,8 +55,7 @@ packages:
     hasBin: true
 
 snapshots:
-  "@anvil-works/python-stubs@file:../../../anvil-python-stubs/.packages/anvil-works-python-stubs-0.1.0-canary.1.tgz":
-    {}
+  "@anvil-works/python-stubs@0.1.0-canary.1": {}
 
   "@playwright/test@1.64.1":
     dependencies:

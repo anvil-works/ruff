@@ -255,7 +255,7 @@ def callable(name: str | None = None, /, *, require_user: bool | _UserCheck = Fa
 def callable(fn_or_name: _CallableT | str | None = ..., /, *, require_user: bool | _UserCheck = False) -> _CallableT | Callable[[_CallableT], _CallableT]:
     """Mark a function as callable from client code.
 
-    [Anvil Docs](https://anvil.works/docs/server/server-modules)"""
+    [Anvil Docs](https://anvil.works/docs/server/server-modules#calling-server-functions-from-client-code)"""
     ...
 
 # Server method decorator (for methods in portable classes)
@@ -291,7 +291,7 @@ def background_task(fn_or_name: _CallableT | str | None = None) -> _CallableT | 
 def launch_background_task(task_name: str, /, *args: Any, **kwargs: Any) -> BackgroundTaskState[Any]:
     """Launch a background task by name.
 
-    [Anvil Docs](https://anvil.works/docs/server/background-tasks)"""
+    [Anvil Docs](https://anvil.works/docs/server/background-tasks/defining-and-running)"""
     ...
 
 # Run a script and wait for its result

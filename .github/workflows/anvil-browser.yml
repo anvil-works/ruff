@@ -1,0 +1,82 @@
+name: Build Anvil browser analysis package
+
+on:
+  push:
+    branches: [anvil]
+    paths:
+      [
+        anvil/**,
+        crates/**,
+        Cargo.toml,
+        Cargo.lock,
+        rust-toolchain.toml,
+        .cargo/**,
+        .github/workflows/anvil-browser.yml,
+      ]
+  pull_request:
+    paths:
+      [
+        anvil/**,
+        crates/**,
+        Cargo.toml,
+        Cargo.lock,
+        rust-toolchain.toml,
+        .cargo/**,
+        .github/workflows/anvil-browser.yml,
+      ]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: anvil-browser-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  package:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    env:
+      RUSTUP_TOOLCHAIN: 1.99.0
+      CARGO_BUILD_JOBS: "2"
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6.0.9
+        with:
+          version: 11.9.0
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version: "26"
+          cache: pnpm
+          cache-dependency-path: anvil/browser/pnpm-lock.yaml
+      - name: Install the pinned Rust toolchain
+        run: rustup toolchain install 1.99.0 --profile minimal --target wasm32-unknown-unknown
+      - uses: jetli/wasm-pack-action@0d096b08b4e5a7de8c28de67e11e945404e9eefa # v0.4.0
+        with:
+          version: v0.13.1
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          workspaces: |
+            . -> target
+            anvil/compat -> target
+      - name: Install browser build dependencies
+        run: |
+          pnpm --dir anvil/browser install --frozen-lockfile --ignore-scripts
+          pnpm --dir anvil/browser exec playwright install --with-deps chrome
+      - name: Build both WASM modules and lazy assets
+        run: pnpm --dir anvil/browser build
+      - name: Test the session and installed package
+        run: pnpm --dir anvil/browser test
+      - name: Pack the reviewed build
+        run: |
+          git diff --exit-code
+          node --input-type=module -e 'import assert from "node:assert/strict"; import fs from "node:fs"; assert.equal(JSON.parse(fs.readFileSync("anvil/browser/dist/BUILD.json")).sourceDirty, false)'
+          pnpm --dir anvil/browser pack --pack-destination "$RUNNER_TEMP/anvil-ty-browser"
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: anvil-ty-browser-${{ github.sha }}
+          path: ${{ runner.temp }}/anvil-ty-browser/*.tgz
+          if-no-files-found: error

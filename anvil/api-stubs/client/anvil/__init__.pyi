@@ -587,7 +587,8 @@ class Slot:
         """Inform this Slot of an earlier Slot with the same target container.
 
         Future calls to add_component() will take account of any components inserted
-        into the earlier slot when calculating the insertion index for the target container."""
+        into the earlier slot when calculating the insertion index for the target container,
+        thereby preserving ordering between the two slots' components."""
         ...
 
 
@@ -622,7 +623,7 @@ js: _JS
 # Event Type Aliases for Autocomplete
 # ============================================================================
 
-# Base Component events - inherited by all components
+# Common component event suggestions; not guaranteed by the base Component.
 _ComponentEvents = Literal["show", "hide"]
 
 # Button and Link events
