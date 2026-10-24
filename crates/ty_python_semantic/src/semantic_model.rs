@@ -27,7 +27,7 @@ use crate::place_load::{
     resolve_place_load,
 };
 use crate::types::ide_support::{ImportAliasResolution, definition_for_name};
-use crate::types::list_members::{all_members, all_reachable_members};
+use crate::types::list_members::{all_members, all_members_filtered, all_reachable_members};
 use crate::types::{
     CycleDetector, ProgramEnvironment, SpecialFormType, Type, TypeQualifiers, binding_type,
     infer_complete_scope_types, infer_definition_types, inferred_declaration,
@@ -110,11 +110,7 @@ impl<'db> SemanticModel<'db> {
     /// name precisely would require more complex analysis.
     ///
     /// Definitions in a project-level `__builtins__.pyi` also shadow standard builtins.
-    pub(crate) fn definitely_has_builtin_binding(
-        &self,
-        name: &str,
-        node: ast::AnyNodeRef<'_>,
-    ) -> bool {
+    pub fn definitely_has_builtin_binding(&self, name: &str, node: ast::AnyNodeRef<'_>) -> bool {
         let index = semantic_index(self.db, self.program_file());
         let Some(scope) = self.scope(node) else {
             return false;
@@ -198,6 +194,8 @@ impl<'db> SemanticModel<'db> {
                 let builtin = module.is_known(self.db, KnownModule::Builtins);
                 let ty = Type::module_literal(self.db, self.program_file(), module);
                 Completion {
+                    scope_depth: None,
+                    inheritance_depth: None,
                     name: CompactString::new(module.name(self.db).as_str()),
                     ty: Some(ty),
                     builtin,
@@ -227,7 +225,7 @@ impl<'db> SemanticModel<'db> {
                 return vec![];
             }
         };
-        self.module_completions(&module_name)
+        self.module_completions(&module_name, &|_| true)
     }
 
     /// Returns submodule-only completions for the given module.
@@ -251,7 +249,11 @@ impl<'db> SemanticModel<'db> {
 
     /// Returns completions for symbols available in the given module as if
     /// it were imported by this model's `File`.
-    fn module_completions(&self, module_name: &ModuleName) -> Vec<Completion<'db>> {
+    fn module_completions(
+        &self,
+        module_name: &ModuleName,
+        name_filter: &impl Fn(&str) -> bool,
+    ) -> Vec<Completion<'db>> {
         let db = self.db;
         let Some(module) = resolve_module(
             self.db,
@@ -272,15 +274,21 @@ impl<'db> SemanticModel<'db> {
             clippy::iter_over_hash_type,
             reason = "completion order is determined later by relevance ranking"
         )]
-        for member in all_members(db, &self.program_environment(), ty) {
+        for member in all_members_filtered(db, &self.program_environment(), ty, name_filter) {
             completions.push(Completion {
+                scope_depth: None,
+                inheritance_depth: None,
                 name: CompactString::new(member.name),
                 ty: Some(member.ty),
                 builtin,
                 is_type_check_only: member.is_type_check_only,
             });
         }
-        completions.extend(self.submodule_completions(&module));
+        completions.extend(
+            self.submodule_completions(&module)
+                .into_iter()
+                .filter(|completion| name_filter(&completion.name)),
+        );
         completions
     }
 
@@ -293,6 +301,8 @@ impl<'db> SemanticModel<'db> {
             let ty = Type::module_literal(self.db, self.program_file(), *submodule);
             let base = submodule.name(self.db).last_component();
             completions.push(Completion {
+                scope_depth: None,
+                inheritance_depth: None,
                 name: CompactString::new(base),
                 ty: Some(ty),
                 builtin,
@@ -312,6 +322,8 @@ impl<'db> SemanticModel<'db> {
         all_members(db, &self.program_environment(), ty)
             .into_iter()
             .map(|member| Completion {
+                scope_depth: None,
+                inheritance_depth: member.inheritance_depth,
                 name: CompactString::new(member.name),
                 ty: Some(member.ty),
                 builtin: false,
@@ -321,11 +333,15 @@ impl<'db> SemanticModel<'db> {
     }
 
     /// Returns completions for symbols available in the scope containing the
-    /// given expression.
+    /// given expression, restricted to names accepted by `name_filter`.
     ///
     /// If a scope could not be determined, then completions for the global
     /// scope of this model's `File` are returned.
-    pub fn scoped_completions(&self, node: ast::AnyNodeRef<'_>) -> Vec<Completion<'db>> {
+    pub fn scoped_completions(
+        &self,
+        node: ast::AnyNodeRef<'_>,
+        name_filter: impl Fn(&str) -> bool,
+    ) -> Vec<Completion<'db>> {
         let db = self.db;
         let program_file = self.program_file();
         let index = semantic_index(self.db, program_file);
@@ -333,10 +349,12 @@ impl<'db> SemanticModel<'db> {
             return vec![];
         };
         let mut completions = vec![];
-        for (file_scope, _) in index.ancestor_scopes(file_scope) {
+        for (scope_depth, (file_scope, _)) in index.ancestor_scopes(file_scope).enumerate() {
             completions.extend(
                 all_reachable_members(db, file_scope.to_scope_id(self.db, program_file)).map(
                     |memberdef| Completion {
+                        scope_depth: u32::try_from(scope_depth).ok(),
+                        inheritance_depth: None,
                         name: CompactString::new(memberdef.member.name),
                         ty: Some(memberdef.member.ty),
                         builtin: false,
@@ -352,6 +370,8 @@ impl<'db> SemanticModel<'db> {
         // not `str | None`).
         completions.extend(
             all_implicit_module_globals(self.db, self.file).map(|(name, ty)| Completion {
+                scope_depth: None,
+                inheritance_depth: None,
                 name: CompactString::new(name),
                 ty: Some(ty),
                 builtin: true,
@@ -365,7 +385,7 @@ impl<'db> SemanticModel<'db> {
             ImportingFile::File(self.file(), self.file.resolver_environment(self.db));
         if resolve_module(self.db, importing_file, &project_builtins).is_some() {
             completions.extend(
-                self.module_completions(&project_builtins)
+                self.module_completions(&project_builtins, &name_filter)
                     .into_iter()
                     .filter(|completion| !completion.is_type_check_only)
                     .map(|mut completion| {
@@ -378,10 +398,12 @@ impl<'db> SemanticModel<'db> {
         // Builtins are available in all scopes.
         let builtins = KnownModule::Builtins.name();
         completions.extend(
-            self.module_completions(&builtins)
+            self.module_completions(&builtins, &name_filter)
                 .into_iter()
                 .filter(|completion| !completion.is_type_check_only),
         );
+
+        completions.retain(|completion| name_filter(&completion.name));
 
         // The above can sometimes result in duplicates. Get rid of them.
         completions.sort_by(|c1, c2| c1.name.cmp(&c2.name));
@@ -978,6 +1000,10 @@ impl NameKind {
 /// A suggestion for code completion.
 #[derive(Clone, Debug)]
 pub struct Completion<'db> {
+    /// Lexical scope distance: zero is the innermost scope; absent for other sources.
+    pub scope_depth: Option<u32>,
+    /// Position of the declaring class in the receiver's MRO, when known.
+    pub inheritance_depth: Option<u32>,
     /// The label shown to the user for this suggestion.
     pub name: CompactString,
     /// The type of this completion, if available.

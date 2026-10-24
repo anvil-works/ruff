@@ -8,9 +8,11 @@ use std::borrow::Cow;
 
 use crate::NavigationTarget;
 use crate::stub_mapping::StubMapper;
+use ruff_db::PythonFile;
 use ruff_db::parsed::ParsedModuleRef;
 use ruff_python_ast::find_node::{CoveringNode, covering_node};
 use ruff_python_ast::token::{Token, TokenAt, TokenKind, Tokens};
+use ruff_python_ast::visitor::{Visitor, walk_stmt};
 use ruff_python_ast::{self as ast, AnyNodeRef, ExprRef};
 use ruff_text_size::{Ranged, TextRange, TextSize};
 
@@ -28,6 +30,58 @@ use ty_python_semantic::{
     TypeQualifiers, definitions_for_imported_symbol, definitions_for_name,
     fixture_bindings_for_parameter,
 };
+
+/// Whether the reference is a bare name known to resolve to a standard builtin.
+/// Shadowed names and attributes return `false`; no type inference is required.
+pub fn is_builtin_reference(db: &dyn Db, file: ProgramFile<'_>, offset: TextSize) -> bool {
+    let python_file = file.python_file(db);
+    // A star import can shadow a builtin without creating a named binding in
+    // the place table. Leave these cases to ordinary type-based resolution.
+    if has_star_import(db, python_file) {
+        return false;
+    }
+    let parsed = ruff_db::parsed::parsed_module(db, python_file).load(db);
+    let model = SemanticModel::new(db, file);
+    let name = match find_goto_target(&model, &parsed, offset) {
+        Some(
+            GotoTarget::Expression(ExprRef::Name(name))
+            | GotoTarget::Call {
+                callable: ExprRef::Name(name),
+                on_parenthesis: false,
+                ..
+            },
+        ) => name,
+        _ => return false,
+    };
+    model.definitely_has_builtin_binding(name.id.as_str(), name.into())
+}
+
+// RPC discovery probes many calls in the same file. Cache this source-only fact
+// so each probe does not walk the entire file again; source edits invalidate it.
+#[salsa::tracked(returns(copy))]
+fn has_star_import(db: &dyn Db, file: PythonFile<'_>) -> bool {
+    let parsed = ruff_db::parsed::parsed_module(db, file).load(db);
+    let mut imports = StarImports::default();
+    imports.visit_body(&parsed.syntax().body);
+    imports.0
+}
+
+#[derive(Default)]
+struct StarImports(bool);
+
+impl<'a> Visitor<'a> for StarImports {
+    fn visit_stmt(&mut self, statement: &'a ast::Stmt) {
+        if let ast::Stmt::ImportFrom(import) = statement
+            && import.names.iter().any(|alias| alias.name.as_str() == "*")
+        {
+            self.0 = true;
+        } else if !self.0 {
+            walk_stmt(self, statement);
+        }
+    }
+
+    fn visit_expr(&mut self, _expression: &'a ast::Expr) {}
+}
 
 #[derive(Clone, Debug)]
 pub(crate) enum GotoTarget<'a> {

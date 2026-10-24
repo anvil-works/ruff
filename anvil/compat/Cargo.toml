@@ -1,0 +1,34 @@
+[package]
+name = "anvil-ty-compat"
+version = "0.1.0-canary.0"
+edition = "2024"
+publish = false
+license = "MIT"
+repository = "https://github.com/anvil-works/ruff"
+description = "Shared Anvil declarations for native validation and browser analysis"
+
+[workspace]
+
+[lib]
+crate-type = ["rlib", "cdylib"]
+
+[dependencies]
+anyhow = "1"
+pep440_rs = { version = "0.7.3", optional = true }
+ruff_python_ast = { path = "../../crates/ruff_python_ast" }
+ruff_python_stdlib = { path = "../../crates/ruff_python_stdlib" }
+ruff_python_parser = { path = "../../crates/ruff_python_parser" }
+ruff_source_file = { path = "../../crates/ruff_source_file" }
+ruff_text_size = { path = "../../crates/ruff_text_size" }
+scraper = { version = "0.27.0", default-features = false }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+serde_yaml = "0.9"
+toml = { version = "1", default-features = false, features = ["parse", "serde", "std"], optional = true }
+wasm-bindgen = { version = "0.2.123", optional = true }
+
+[features]
+browser = ["dep:wasm-bindgen", "dep:pep440_rs", "dep:toml"]
+
+[build-dependencies]
+walkdir = "2"

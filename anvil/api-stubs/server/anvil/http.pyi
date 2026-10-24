@@ -12,7 +12,7 @@ from anvil import Media
 class HttpError(Exception):
     """HTTP error with status code and content.
 
-    [Anvil Docs](https://anvil.works/docs/http-apis/making-http-requests)"""
+    [Anvil Docs](https://anvil.works/docs/external-resources/http-apis/making-http-requests)"""
 
     status: int
     """The numeric HTTP status error (eg 404 for "not found").
@@ -52,7 +52,7 @@ def request(
         timeout: An int or float representing the amount of time, in seconds, to wait for a response.
             Default is 60 seconds.
 
-    [Anvil Docs](https://anvil.works/docs/http-apis/making-http-requests)"""
+    [Anvil Docs](https://anvil.works/docs/external-resources/http-apis/making-http-requests)"""
     ...
 
 def url_encode(string_to_encode: str, /) -> str:

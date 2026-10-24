@@ -6,19 +6,7 @@ use ruff_python_ast::visitor::{Visitor, walk_expr, walk_stmt};
 use ruff_python_ast::{Alias, Expr, ExprContext, Stmt};
 use ruff_python_parser::parse_module;
 
-/// Convert a relative source path to a Python module name, accepting either OS separator.
-pub fn module_name(package: &str, relative: &Path) -> String {
-    let module = relative
-        .with_extension("")
-        .to_string_lossy()
-        .replace(['/', '\\'], ".");
-    let module = module.strip_suffix(".__init__").unwrap_or(&module);
-    if module == "__init__" {
-        package.to_owned()
-    } else {
-        format!("{package}.{module}")
-    }
-}
+pub use anvil_ty_compat::imports::module_name;
 
 pub fn alias(package: &str, relative: &Path, source: &str) -> String {
     let module = module_name(package, relative);

@@ -949,6 +949,28 @@ pub fn definitions_and_overloads_for_function<'db>(
     }
 }
 
+/// Whether a parameter type has a known callable alternative for completion hints.
+///
+/// Dynamic types alone do not suggest passing a callable. Nullable callable types do,
+/// while callables nested in containers do not describe the argument itself.
+pub fn has_callable_alternative<'db>(
+    db: &'db dyn Db,
+    env: &ProgramEnvironment<'db>,
+    ty: Type<'db>,
+) -> bool {
+    let ty = ty.expand_top_level_aliases(db, env);
+    let callable = |alternative: Type<'db>| {
+        alternative
+            .top_materialization(db, env)
+            .try_upcast_to_callable(db, env)
+            .is_some()
+    };
+    match ty {
+        Type::Union(union) => union.elements(db).iter().copied().any(callable),
+        ty => callable(ty),
+    }
+}
+
 /// Details about a callable signature for IDE support.
 #[derive(Debug, Clone)]
 pub struct CallSignatureDetails<'db> {

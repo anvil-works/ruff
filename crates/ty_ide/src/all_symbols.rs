@@ -1,6 +1,7 @@
 use compact_str::CompactString;
 use rayon::prelude::*;
 use ruff_db::files::File;
+use std::num::NonZeroUsize;
 use ty_module_resolver::{Module, all_modules};
 use ty_project::{Db, parallel::ParallelIteratorExt};
 use ty_python_core::ProgramFile;
@@ -33,16 +34,9 @@ pub fn all_symbols<'db>(
     let results = all_modules(db, resolver_environment)
         .into_par_iter()
         .map_with_db(db, |db, module| {
-            let name = module.name(db);
-
             let is_non_first_party = module.search_path(db).is_none_or(|sp| !sp.is_first_party());
 
-            // Filter out non-first-party test and private modules, while retaining private
-            // typeshed packages that are useful when writing type annotations.
-            if is_non_first_party
-                && (name.is_test_module()
-                    || name.is_private() && !module.is_bundled_typing_stub(db))
-            {
+            if !is_indexed_module(db, module) {
                 return Vec::new();
             }
 
@@ -81,6 +75,40 @@ pub fn all_symbols<'db>(
         .collect();
 
     merge::merge(db, results)
+}
+
+/// Prepares one batch of the same cached symbols used by auto-import searches.
+///
+/// The returned offset continues preparation; `None` means all modules were visited.
+/// Restart at zero if the set of available modules changes between calls. Callers can
+/// yield between batches without retaining a database borrow or changing source text.
+pub fn prepare_completion_index(
+    db: &dyn Db,
+    importing_from: ProgramFile<'_>,
+    offset: usize,
+    batch_size: NonZeroUsize,
+) -> Option<usize> {
+    let modules = all_modules(db, importing_from.resolver_environment(db));
+    let end = offset.saturating_add(batch_size.get()).min(modules.len());
+    for module in modules.iter().skip(offset).take(batch_size.get()).copied() {
+        if is_indexed_module(db, module)
+            && let Some(file) = module.file(db)
+        {
+            symbols_for_file_global_only(
+                db,
+                ProgramFile::new(db, file, importing_from.program(db)),
+            );
+        }
+    }
+    (end < modules.len()).then_some(end)
+}
+
+fn is_indexed_module(db: &dyn Db, module: Module<'_>) -> bool {
+    let name = module.name(db);
+    let is_non_first_party = module.search_path(db).is_none_or(|sp| !sp.is_first_party());
+    // Keep private typing helpers, but exclude third-party test and private modules.
+    !(is_non_first_party
+        && (name.is_test_module() || name.is_private() && !module.is_bundled_typing_stub(db)))
 }
 
 /// A symbol found in the workspace and dependencies, including the

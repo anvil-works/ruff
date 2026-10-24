@@ -16,7 +16,7 @@ In Anvil, `window` is registered in `sys.modules` as `anvil.js.window`, allowing
 This module exports all window properties as module-level attributes for convenient access.
 DOM types are also available for type annotations.
 
-[Anvil Docs](https://anvil.works/docs/client/javascript)
+[Anvil Docs](https://anvil.works/docs/client/customisation/javascript)
 
 Generated from WebIDL specifications via webtypy.
 """

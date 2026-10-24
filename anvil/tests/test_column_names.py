@@ -39,7 +39,7 @@ class ColumnNames(unittest.TestCase):
             "row['café'] = 'Paris'\n"
             "name: str = row['full name']\n"
             "quoted: str = row['quote\"name']\n"
-            "normal: str = row.name\n"
+            "normal: str = row['name']\n"
             "changes = row.buffered_changes\n"
             "if changes is not None:\n    buffered: str = changes['full name']\n"
             "for person in app_tables.people.search(**{'full name': 'Ada'}):\n"
@@ -60,6 +60,21 @@ class ColumnNames(unittest.TestCase):
         issues = events[-1]["data"].get("issues", [])
         self.assertEqual(len(issues), 1, events)
         self.assertEqual(issues[0]["rule"], "invalid-assignment")
+
+        # Plain rows expose columns as keys; only attrs=True models add attributes.
+        file.write_text(
+            file.read_text().replace(
+                "name: int = row['full name']", "name: str = row['full name']"
+            )
+            + "row.name\n"
+        )
+        result, events = self.validate(file)
+        self.assertEqual(result.returncode, 1, (result.stdout, result.stderr))
+        self.assertEqual(
+            [issue["rule"] for issue in events[-1]["data"].get("issues", [])],
+            ["unresolved-attribute"],
+            events,
+        )
 
     def test_string_key_writes_reject_wrong_types_in_client_and_server(self):
         for environment in ("client", "server"):

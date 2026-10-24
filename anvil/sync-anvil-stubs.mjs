@@ -7,7 +7,8 @@ import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const directory = path.dirname(fileURLToPath(import.meta.url));
-const anvil = path.resolve(directory, '../../anvil');
+// Accept a source checkout so feature worktrees can bundle the committed master stubs.
+const anvil = process.argv[2] ? path.resolve(process.argv[2]) : path.resolve(directory, '../../anvil');
 const source = path.join(anvil, 'doc/anvil-api-stubs/source');
 const outputRoot = path.join(directory, 'api-stubs');
 const { generateStubs } = await import(pathToFileURL(path.join(anvil, 'doc/anvil-api-stubs/generate-stubs.mjs')));
@@ -18,9 +19,17 @@ for (const entry of await readdir(source, { recursive: true, withFileTypes: true
     const filename = path.join(entry.parentPath, entry.name);
     files[path.relative(source, filename)] = createHash('sha256').update(await readFile(filename)).digest('hex');
 }
+// The generated docs depend on the catalogue as well as the handwritten types.
+const inputs = {};
+for (const filename of ['doc/dist/index.json', 'doc/anvil-api-stubs/generate-stubs.mjs',
+    'doc/anvil-api-stubs/stub_documentation.py', 'doc/anvil-api-stubs/plotly-stubs.mjs',
+    'doc/anvil-api-stubs/source/completion-preferences.json', 'website/static/_/redirects.yaml']) {
+    inputs[filename] = createHash('sha256').update(await readFile(path.join(anvil, filename))).digest('hex');
+}
 await writeFile(path.join(outputRoot, 'SOURCE.json'), JSON.stringify({
     repository: 'https://github.com/anvil-works/anvil',
     revision: execFileSync('git', ['-C', anvil, 'rev-parse', 'HEAD'], { encoding: 'utf8' }).trim(),
     files: Object.fromEntries(Object.entries(files).sort(([a], [b]) => a.localeCompare(b))),
+    inputs,
 }, null, 2) + '\n');
 console.log(`Generated ${result.clientCount} client and ${result.serverCount} server stubs (${result.changed} changed)`);

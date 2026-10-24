@@ -50,6 +50,25 @@ class ValidateIntegration(unittest.TestCase):
         target.write_text(content)
         return target
 
+    @unittest.skipUnless(NATIVE, "native Skulpt import policy")
+    def test_skulpt_imported_submodules_preserve_supported_exports(self):
+        file = self.write(
+            "client_code/Imports.py",
+            "from urllib import parse, request\n"
+            "from collections import abc, namedtuple\n"
+            "import webbrowser\n",
+        )
+        result, events = self.validate(file)
+        self.assertEqual(result.returncode, 1, (result.stdout, result.stderr))
+        issues = events[-1]["data"]["issues"]
+        self.assertEqual(
+            [(issue["rule"], issue["line"]) for issue in issues],
+            [
+                ("reportAnvilUnsupportedSkulptImport", 1),
+                ("reportAnvilUnsupportedSkulptImport", 2),
+            ],
+        )
+
     def validate(self, target=None, backend=None):
         executable = backend or ADAPTER
         probe = subprocess.run(
@@ -63,7 +82,7 @@ class ValidateIntegration(unittest.TestCase):
             check=False,
             env={
                 **os.environ,
-                "ANVIL_PYRIGHT": str(executable),
+                "ANVIL_TY": str(executable),
                 "ANVIL_PYRIGHT_ROOT": str(PYRIGHT),
             },
             text=True,

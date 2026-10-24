@@ -1,0 +1,44 @@
+{
+  "name": "@anvil-works/anvil-ty-browser",
+  "version": "0.1.0-canary.1",
+  "type": "module",
+  "scripts": {
+    "build:comlink": "node build-comlink.mjs",
+    "build:stubs": "node build-stub-packs.mjs",
+    "build:wasm": "wasm-pack build ../../crates/ty_wasm --dev --target web --out-dir ../../anvil/browser/dist/wasm",
+    "build:compat": "node build-stub-packs.mjs && wasm-pack build ../compat --release --target web --out-dir ../browser/dist/compat -- --features browser",
+    "test": "node --test --test-concurrency=1 tests/*.test.mjs",
+    "build": "node build.mjs",
+    "prepack": "node build.mjs --verify"
+  },
+  "devDependencies": {
+    "@anvil-works/python-stubs": "0.1.0-canary.1",
+    "@playwright/test": "^1.63.0",
+    "comlink": "^4.4.2"
+  },
+  "description": "Prebuilt Ty WebAssembly and Anvil IDE browser analysis assets",
+  "license": "MIT",
+  "files": [
+    "session.mjs",
+    "contexts.mjs",
+    "forms.mjs",
+    "source-projection.mjs",
+    "renames.mjs",
+    "worker.mjs",
+    "dist"
+  ],
+  "exports": {
+    "./package.json": "./package.json",
+    "./session.mjs": "./session.mjs",
+    "./build.json": "./dist/BUILD.json"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/anvil-works/ruff.git",
+    "directory": "anvil/browser"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "packageManager": "pnpm@11.9.0"
+}

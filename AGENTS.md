@@ -7,7 +7,9 @@ This repository contains both Ruff (a Python linter and formatter) and ty (a Pyt
 `main` tracks Astral's upstream Ruff repository. The `anvil` branch carries the
 Anvil validation adapter and npm packages in one commit.
 For Anvil development, read [anvil/AGENTS.md](anvil/AGENTS.md) and its linked guides.
-Keep Anvil-specific code under `anvil/` and engine sources identical to `main`.
+Keep Anvil-specific code under `anvil/`. The only approved engine difference is
+the generic callable-parameter metadata described in [anvil/ENGINE_PATTERNS.md](anvil/ENGINE_PATTERNS.md);
+keep other engine sources identical to `main`.
 
 ## Before contributing
 

@@ -11,15 +11,33 @@ from anvil.tables import Row
 from anvil.users import mfa as mfa
 
 # Exceptions (available in both environments)
-class UserExists(Exception): ...
-class AuthenticationFailed(Exception): ...
-class EmailNotConfirmed(AuthenticationFailed): ...
-class AccountIsNotEnabled(AuthenticationFailed): ...
-class TooManyPasswordFailures(AuthenticationFailed): ...
-class PasswordNotAcceptable(Exception): ...
-class MFARequired(AuthenticationFailed): ...
-class MFAException(AuthenticationFailed): ...
-class PasswordResetRequested(Exception): ...
+class UserExists(Exception):
+    """Create a new 'UserExists' object"""
+    ...
+class AuthenticationFailed(Exception):
+    """Create a new 'AuthenticationFailed' object"""
+    ...
+class EmailNotConfirmed(AuthenticationFailed):
+    """Create a new 'EmailNotConfirmed' object"""
+    ...
+class AccountIsNotEnabled(AuthenticationFailed):
+    """Create a new 'AccountIsNotEnabled' object"""
+    ...
+class TooManyPasswordFailures(AuthenticationFailed):
+    """Create a new 'TooManyPasswordFailures' object"""
+    ...
+class PasswordNotAcceptable(Exception):
+    """Create a new 'PasswordNotAcceptable' object"""
+    ...
+class MFARequired(AuthenticationFailed):
+    """Create a new 'MFARequired' object"""
+    ...
+class MFAException(AuthenticationFailed):
+    """Create a new 'MFAException' object"""
+    ...
+class PasswordResetRequested(Exception):
+    """Create a new 'PasswordResetRequested' object"""
+    ...
 
 # Functions available in both environments
 def get_user(allow_remembered: bool = True) -> Row | None:
@@ -41,7 +59,7 @@ def login_with_email(email: str, password: str, remember: bool = False) -> Row |
 
 By default, login status is not remembered between sessions; set remember=True to remember login status.
 
-    [Anvil Docs](https://anvil.works/docs/users/email_login)"""
+    [Anvil Docs](https://anvil.works/docs/users/logging-in-using-code)"""
     ...
 
 def signup_with_email(email: str, password: str, remember: bool = False) -> Row | None:
@@ -49,31 +67,31 @@ def signup_with_email(email: str, password: str, remember: bool = False) -> Row 
 
 By default, login status is not remembered between sessions; set remember=True to remember login status.
 
-    [Anvil Docs](https://anvil.works/docs/users/email_login)"""
+    [Anvil Docs](https://anvil.works/docs/users/logging-in-using-code)"""
     ...
 
 def send_password_reset_email(email_address: str) -> None:
     """Send a password-reset email to the specified user
 
-    [Anvil Docs](https://anvil.works/docs/users/email_login)"""
+    [Anvil Docs](https://anvil.works/docs/users/logging-in-using-code)"""
     ...
 
 def send_token_login_email(email_address: str) -> None:
     """Send a login link email to the specified user
 
-    [Anvil Docs](https://anvil.works/docs/users/email_login)"""
+    [Anvil Docs](https://anvil.works/docs/users/logging-in-using-code)"""
     ...
 
 def reset_password(old_password: str, new_password: str) -> None:
     """Reset the password for the current user
 
-    [Anvil Docs](https://anvil.works/docs/users/email_login)"""
+    [Anvil Docs](https://anvil.works/docs/users/logging-in-using-code)"""
     ...
 
 def send_mfa_reset_email(email_address: str) -> None:
     """Send a two-factor authentication reset email to the specified user.
 
-    [Anvil Docs](https://anvil.works/docs/users/mfa)"""
+    [Anvil Docs](https://anvil.works/docs/users/two-factor-authentication)"""
     ...
 
 
@@ -84,7 +102,7 @@ additional_scopes: If supplied, these are passed on to anvil.google.auth.login()
 
 By default, login status is not remembered between sessions; set remember=True to remember login status.
 
-    [Anvil Docs](https://anvil.works/docs/users/google)"""
+    [Anvil Docs](https://anvil.works/docs/users/authentication-choices)"""
     ...
 
 def signup_with_google(additional_scopes: list[str] | None = None, remember: bool = False) -> Row | None:
@@ -94,7 +112,7 @@ additional_scopes: If supplied, these are passed on to anvil.google.auth.login()
 
 By default, login status is not remembered between sessions; set remember=True to remember login status.
 
-    [Anvil Docs](https://anvil.works/docs/users/google)"""
+    [Anvil Docs](https://anvil.works/docs/users/authentication-choices)"""
     ...
 
 def login_with_facebook(additional_scopes: list[str] | None = None, remember: bool = False) -> Row | None:
@@ -104,7 +122,7 @@ additional_scopes: If supplied, these are passed on to anvil.facebook.auth.login
 
 By default, login status is not remembered between sessions; set remember=True to remember login status.
 
-    [Anvil Docs](https://anvil.works/docs/users/facebook)"""
+    [Anvil Docs](https://anvil.works/docs/users/authentication-choices)"""
     ...
 
 def signup_with_facebook(additional_scopes: list[str] | None = None, remember: bool = False) -> Row | None:
@@ -114,7 +132,7 @@ additional_scopes: If supplied, these are passed on to anvil.facebook.auth.login
 
 By default, login status is not remembered between sessions; set remember=True to remember login status.
 
-    [Anvil Docs](https://anvil.works/docs/users/facebook)"""
+    [Anvil Docs](https://anvil.works/docs/users/authentication-choices)"""
     ...
 
 def login_with_microsoft(additional_scopes: list[str] | None = None, remember: bool = False) -> Row | None:
@@ -124,7 +142,7 @@ additional_scopes: If supplied, these are passed on to anvil.microsoft.auth.logi
 
 By default, login status is not remembered between sessions; set remember=True to remember login status.
 
-    [Anvil Docs](https://anvil.works/docs/users/microsoft)"""
+    [Anvil Docs](https://anvil.works/docs/users/authentication-choices)"""
     ...
 
 def signup_with_microsoft(additional_scopes: list[str] | None = None, remember: bool = False) -> Row | None:
@@ -134,7 +152,7 @@ additional_scopes: If supplied, these are passed on to anvil.microsoft.auth.logi
 
 By default, login status is not remembered between sessions; set remember=True to remember login status.
 
-    [Anvil Docs](https://anvil.works/docs/users/microsoft)"""
+    [Anvil Docs](https://anvil.works/docs/users/authentication-choices)"""
     ...
 
 def login_with_saml(remember: bool = False) -> Row | None:
@@ -142,7 +160,7 @@ def login_with_saml(remember: bool = False) -> Row | None:
 
 By default, login status is not remembered between sessions; set remember=True to remember login status.
 
-    [Anvil Docs](https://anvil.works/docs/users/saml)"""
+    [Anvil Docs](https://anvil.works/docs/integrations/saml)"""
     ...
 
 def signup_with_saml(remember: bool = False) -> Row | None:
@@ -150,7 +168,7 @@ def signup_with_saml(remember: bool = False) -> Row | None:
 
 By default, login status is not remembered between sessions; set remember=True to remember login status.
 
-    [Anvil Docs](https://anvil.works/docs/users/saml)"""
+    [Anvil Docs](https://anvil.works/docs/integrations/saml)"""
     ...
 
 @overload
@@ -170,7 +188,7 @@ allow_cancel: if True, the login form has a Cancel button that the user can use 
 
 initial_email: Optional email address to pre-fill the Email box with when email login is enabled.
 
-    [Anvil Docs](https://anvil.works/docs/users/authentication_forms)"""
+    [Anvil Docs](https://anvil.works/docs/users/presenting-a-login-form)"""
     ...
 
 @overload
@@ -184,17 +202,17 @@ remember_by_default: if True, the 'remember me' checkbox will be enabled by defa
 
 allow_cancel: if True, the signup form has a Cancel button that the user can use to dismiss the form.
 
-    [Anvil Docs](https://anvil.works/docs/users/authentication_forms)"""
+    [Anvil Docs](https://anvil.works/docs/users/presenting-a-login-form)"""
     ...
 
 def change_password_with_form(require_old_password: bool = True) -> None:
     """Display a form allowing the current user to reset their password.
 
-    [Anvil Docs](https://anvil.works/docs/users/authentication_forms)"""
+    [Anvil Docs](https://anvil.works/docs/users/presenting-a-login-form)"""
     ...
 
 def configure_account_with_form() -> None:
     """Display a form allowing the current user to configure their account. The form contains links for password reset and two-factor authentication configuration.
 
-    [Anvil Docs](https://anvil.works/docs/users/authentication_forms)"""
+    [Anvil Docs](https://anvil.works/docs/users/presenting-a-login-form)"""
     ...

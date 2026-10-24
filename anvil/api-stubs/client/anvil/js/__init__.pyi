@@ -4,7 +4,7 @@
 #
 """The `anvil.js` module provides JavaScript interop functionality for Anvil apps running in the browser.
 
-[Anvil Docs](https://anvil.works/docs/client/javascript)"""
+[Anvil Docs](https://anvil.works/docs/client/customisation/javascript)"""
 
 from typing import Any, Callable, TypeVar
 
@@ -27,7 +27,7 @@ class ExternalError(Exception):
 
     Typically used in a try/except block to catch a Javascript Error.
 
-    [Anvil Docs](https://anvil.works/docs/client/javascript/accessing-javascript#catching-exceptions)"""
+    [Anvil Docs](https://anvil.works/docs/client/customisation/javascript/accessing-javascript#catching-exceptions)"""
 
     original_error: Any
     """The original Javascript error that was raised."""
@@ -49,7 +49,7 @@ def await_promise(js_promise: Any, /) -> Any:
     Args:
         js_promise: A JavaScript Promise object wrapped as a ProxyType.
 
-    [Anvil Docs](https://anvil.works/docs/client/javascript/accessing-javascript#calling-asynchronous-javascript-apis)"""
+    [Anvil Docs](https://anvil.works/docs/client/customisation/javascript/accessing-javascript#calling-asynchronous-javascript-apis)"""
     ...
 
 
@@ -60,7 +60,7 @@ def call(js_function_or_name: Any, /, *args: Any) -> Any:
         js_function_or_name: Either a string naming a global JavaScript function, or a ProxyType function object.
         *args: Arguments to pass to the JavaScript function.
 
-    [Anvil Docs](https://anvil.works/docs/client/javascript/accessing-javascript#calling-proxyobjects)"""
+    [Anvil Docs](https://anvil.works/docs/client/customisation/javascript/accessing-javascript#calling-proxyobjects)"""
     ...
 
 
@@ -76,7 +76,7 @@ def get_dom_node(component: Component, /) -> window.HTMLElement:
     Returns:
         The DOM node as a ProxyType.
 
-    [Anvil Docs](https://anvil.works/docs/client/javascript/accessing-javascript#accessing-a-dom-node)"""
+    [Anvil Docs](https://anvil.works/docs/client/customisation/javascript/accessing-javascript#accessing-a-dom-node)"""
     ...
 
 
@@ -87,7 +87,7 @@ def new(js_class: Any, /, *args: Any) -> Any:
         js_class: A JavaScript class/constructor function.
         *args: Arguments to pass to the constructor.
 
-    [Anvil Docs](https://anvil.works/docs/client/javascript/accessing-javascript#calling-with-new)"""
+    [Anvil Docs](https://anvil.works/docs/client/customisation/javascript/accessing-javascript#calling-with-new)"""
     ...
 
 
@@ -112,7 +112,7 @@ def report_exceptions(wrapped_function: _F, /) -> _F:
     Error handling may be suppressed by an external javascript library.
     This decorator makes sure that errors in your python code are reported.
 
-    [Anvil Docs](https://anvil.works/docs/client/javascript/accessing-javascript#capturing-exceptions-in-callbacks)"""
+    [Anvil Docs](https://anvil.works/docs/client/customisation/javascript/accessing-javascript#capturing-exceptions-in-callbacks)"""
     ...
 
 
@@ -129,7 +129,7 @@ def report_all_exceptions(enabled: bool, *, reraise: bool = True) -> None:
         enabled: Whether to enable exception reporting.
         reraise: If True, re-raise exceptions after reporting. If False, return undefined instead.
 
-    [Anvil Docs](https://anvil.works/docs/client/javascript/accessing-javascript#capturing-exceptions-in-callbacks)"""
+    [Anvil Docs](https://anvil.works/docs/client/customisation/javascript/accessing-javascript#capturing-exceptions-in-callbacks)"""
     ...
 
 
@@ -145,5 +145,5 @@ def import_from(url: str, /) -> Any:
     Returns:
         The imported JavaScript module as a ProxyType.
 
-    [Anvil Docs](https://anvil.works/docs/client/javascript/accessing-javascript#javascript-modules)"""
+    [Anvil Docs](https://anvil.works/docs/client/customisation/javascript/accessing-javascript#javascript-modules)"""
     ...

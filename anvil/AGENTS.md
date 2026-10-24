@@ -1,21 +1,20 @@
 # Anvil development
 
-The first milestone is a proven replacement for the Python semantic checker used
-by `anvil validate`, with measured speed and memory. YAML and HTML structure
-validation remain in anvil-cli. Anvil-specific LSP and browser integration are
-future projects. Target Anvil metadata, runtime checks, import resolution and useful
-Python type checking through the existing CLI. Preserve ty's native diagnostics
-and inference. Record differences in Pyright-specific wording, diagnostic grouping,
-checking-mode presets and independent optional-only rule settings; reproduce them
-only when a concrete Anvil validation requirement demonstrates the need.
+This directory contains the native checker used by `anvil validate` and the
+experimental IDE browser integration. YAML and HTML validation remain in
+anvil-cli. Preserve ty's native diagnostics and inference; implement Anvil
+behaviour in declarations and adapters. See [native/README.md](native/README.md)
+for validation contracts and [browser/README.md](browser/README.md) for the
+ordered browser session and supported IDE behaviour.
 
 ## Maintainability
 
 - Put Anvil adapters, experiments, tests and documentation under `anvil/`.
 - Implement Anvil support with standard Python stubs, module layouts, ty
-    configuration and the adapter. Engine sources and tests under `crates/` stay
-    identical to upstream `main`; accept upstream typing limitations rather than
-    maintaining local engine patches. See [ENGINE_PATTERNS.md](ENGINE_PATTERNS.md).
+    configuration and the adapter. The approved `crates/` differences are the
+    generic WASM API extensions described in [ENGINE_PATTERNS.md](ENGINE_PATTERNS.md).
+    Keep other engine sources and tests identical to upstream `main`; accept
+    upstream typing limitations rather than adding inference exceptions.
 - Rust engine sources live in `crates/` in this same repository. The `anvil`
     branch holds the Anvil integration in one commit above upstream `main`.
 - The native validation adapter is a separate workspace in `anvil/native`, using
@@ -33,9 +32,10 @@ only when a concrete Anvil validation requirement demonstrates the need.
 - Use TDD for behaviour changes: write one failing integration test, confirm the
     expected failure, implement the smallest slice, then rerun it. When planning,
     use "Write use TDD" as the first implementation step.
-- Test the public validation boundary through the real CLI and real checker executable.
-    Protect valid apps, meaningful errors, file targeting, diagnostics and source
-    ranges. Keep validation proportional.
+- Test native validation through the real CLI and checker executable. Test browser
+    changes through `BrowserAnalysisSession` with its real worker and WASM.
+    Protect source ranges, diagnostics and the behaviour being changed. Keep
+    validation proportional.
 - Preserve source apps and the user's Git index. Experiments use temporary
     workspaces. Local validation never fetches Anvil dependencies.
 - Before declaring parity or a performance win, compare diagnostics on the same
@@ -55,4 +55,4 @@ and inspect its working tree. Keep their existing behaviour until a supported
 ty replacement has evidence of compatibility.
 
 Use tilde fences for fenced Markdown examples. Stop when the requested milestone
-is handled; record subsequent work rather than expanding into LSP implementation.
+is handled; record subsequent work rather than expanding its scope.

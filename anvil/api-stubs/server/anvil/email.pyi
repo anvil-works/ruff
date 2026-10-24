@@ -4,7 +4,7 @@
 #
 """The `anvil.email` module contains functions for sending and receiving email in your Anvil app.
 
-[Anvil Docs](https://anvil.works/docs/email)"""
+[Anvil Docs](https://anvil.works/docs/server/email)"""
 
 from typing import Callable, TypeVar, overload
 
@@ -24,7 +24,7 @@ class DeliveryFailure(Exception):
 
     Optionally, you may specify a message and SMTP error code with the rejection.
 
-    [Anvil Docs](https://anvil.works/docs/email/sending_and_receiving#rejecting-email)"""
+    [Anvil Docs](https://anvil.works/docs/server/email/sending-and-receiving#rejecting-email)"""
 
     def __init__(self, message: str | None = None, smtp_code: int = 554) -> None: ...
 
@@ -48,7 +48,7 @@ class SendReport:
 class Message:
     """Represents an incoming email message.
 
-    [Anvil Docs](https://anvil.works/docs/email/incoming)"""
+    [Anvil Docs](https://anvil.works/docs/server/email/sending-and-receiving#receiving-email)"""
 
     class Envelope:
         """The sender and recipient of an email, according to the SMTP envelope."""
@@ -149,7 +149,7 @@ def send(
         attachments: A list of Media objects to send as attachments with this email.
         inline_attachments: Inline attachments that can be used in this email's HTML, for example in <img> tags. Must be a dictionary whose keys are IDs and values are Media objects. IDs can then be used in a message's HTML with 'cid:xxx' URIs.
 
-    [Anvil Docs](https://anvil.works/docs/email)"""
+    [Anvil Docs](https://anvil.works/docs/server/email)"""
     ...
 
 
@@ -157,7 +157,7 @@ def send(
 def handle_message(fn: _MessageHandler) -> _MessageHandler:
     """Decorator to handle incoming emails.
 
-    [Anvil Docs](https://anvil.works/docs/email/incoming)"""
+    [Anvil Docs](https://anvil.works/docs/server/email/sending-and-receiving#receiving-email)"""
     ...
 
 
@@ -168,7 +168,7 @@ def handle_message(*, require_dkim: bool = False) -> Callable[[_MessageHandler],
     Args:
         require_dkim: If True, reject emails without a valid DKIM signature from the sender.
 
-    [Anvil Docs](https://anvil.works/docs/email/incoming)"""
+    [Anvil Docs](https://anvil.works/docs/server/email/sending-and-receiving#receiving-email)"""
     ...
 
 
@@ -184,5 +184,5 @@ def handle_message(
     Args:
         require_dkim: If True, reject emails without a valid DKIM signature from the sender.
 
-    [Anvil Docs](https://anvil.works/docs/email/incoming)"""
+    [Anvil Docs](https://anvil.works/docs/server/email/sending-and-receiving#receiving-email)"""
     ...

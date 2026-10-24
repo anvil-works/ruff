@@ -35,7 +35,7 @@ mod symbols;
 mod type_hierarchy;
 mod workspace_symbols;
 
-pub use all_symbols::{AllSymbolInfo, all_symbols};
+pub use all_symbols::{AllSymbolInfo, all_symbols, prepare_completion_index};
 pub use call_hierarchy::incoming_calls::{IncomingCall, incoming_calls};
 pub use call_hierarchy::outgoing_calls::{OutgoingCall, outgoing_calls};
 pub use call_hierarchy::{CallHierarchyItem, prepare_call_hierarchy};
@@ -48,7 +48,7 @@ pub use doc_highlights::document_highlights;
 pub use document_symbols::document_symbols;
 pub use find_references::find_references;
 pub use folding_range::{FoldingRange, FoldingRangeKind, folding_ranges};
-pub use goto::{goto_declaration, goto_definition, goto_type_definition};
+pub use goto::{goto_declaration, goto_definition, goto_type_definition, is_builtin_reference};
 pub use goto_implementation::goto_implementation;
 pub use hints::{Hint, HintKind, hints};
 pub use hover::hover;

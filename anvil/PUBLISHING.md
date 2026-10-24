@@ -10,20 +10,51 @@ without npm credentials; it does not publish them. A successful five-platform
 build is required before checker publication. The CLI registry lockfile can be
 finished after the checker exists on npm.
 
-## Current source status — 20 October 2026
+## IDE browser assets
+
+The browser package has its own version in `anvil/browser/package.json`. A
+browser-only release does not require new native checker or Python-stub packages.
+The published browser canary is `0.1.0-canary.0`; this candidate uses
+`0.1.0-canary.1` with the already published `@anvil-works/python-stubs@0.1.0-canary.1`.
+Recheck npm before publication: an existing version cannot be replaced.
+
+1. Commit the reviewed browser source, including its new package version. From
+    that clean checkout, run `pnpm install --frozen-lockfile`, `pnpm build` and
+    `pnpm test` in `anvil/browser`. Both WASM modules must use release mode.
+1. Inspect `dist/BUILD.json`: it must name the reviewed source revision, the new
+    browser version and `sourceDirty: false`. Pack outside the source checkout
+    with `pnpm pack --pack-destination "$(mktemp -d)"` and test that exact archive
+    through the installed-package browser smoke before publishing it.
+1. Stu publishes the reviewed archive with `npm publish <archive> --access public
+    --tag canary`. The new completion preparation protocol requires the new
+    browser package; the IDE must not ship that protocol with the older canary.
+1. Install the exact published browser version in Anvil and regenerate its
+    registry lockfile. Update `test/analysis/performance/ty-source.json` to the
+    same source revision. Run frontend, installed-package acceptance and
+    completion-performance checks before merging. Keep `ty-analysis` off by default.
+
+The browser workflow builds both WASM modules, tests the installed package in
+Chrome and uploads an npm archive. It has no npm credentials and never publishes.
+The IDE copies the installed package, including lazy packs and licence notices,
+under a versioned URL. Its Docker build needs neither Rust nor a sibling checkout.
+The native validation workflow remains separate.
+
+## Native release snapshot — 20 October 2026
 
 The checker branch is rebased onto upstream Ruff `main` at `15d1c4116f`; the CLI
 branch includes Anvil CLI `master` at `23a534b`. The native Cargo lockfile has been
 refreshed for upstream's crate version bump. Bundled API stubs are regenerated
 from Anvil `master` at `edfeb809fd`, including `HtmlComponent.attrs`.
 The checker candidate remains
-`0.1.0-canary.0`; all six package versions are unused on npm. The proposed CLI
+`0.1.0-canary.0`; that native package family has since been published. The proposed CLI
 version remains `0.8.0-canary.23` and passes its registry version guard. Recheck
 availability immediately before publishing.
 
-Engine sources and tests under `crates/` match upstream `main`. The local method
-assignment and built-in division patches have been removed to avoid maintaining
-fork-specific typing rules. See [ENGINE_PATTERNS.md](ENGINE_PATTERNS.md) for the
+This native release snapshot predates the browser integration. The browser branch
+also exposes generic engine APIs and completion optimisations;
+[ENGINE_PATTERNS.md](ENGINE_PATTERNS.md) describes the current differences.
+Inference and diagnostics remain upstream. The old method-assignment and built-in
+division patches have been removed. See [ENGINE_PATTERNS.md](ENGINE_PATTERNS.md) for the
 accepted limitations. Earlier packages and diagnostic reports include those
 patches; rebuild release artifacts from the cleaned source before publication.
 
@@ -43,10 +74,12 @@ Read these paths in order:
 
 1. CLI `src/validatePython.ts`: executable selection, process handling and diagnostics.
 1. Fork `anvil/native/src/main.rs`: preparation and separate client/server ty databases.
-1. Fork `forms.rs`, `handles.rs`, `environments.rs` and `policy.rs` in that directory:
-    designer properties/events, imports and server runtimes.
+1. Fork `anvil/native/src/forms.rs` and `anvil/compat/src/forms.rs`: native
+    loading and shared Designer declarations. Read native `handles.rs`,
+    `environments.rs` and `policy.rs` for event bindings, imports and runtimes.
 1. Fork [ENGINE_PATTERNS.md](ENGINE_PATTERNS.md): accepted upstream typing limitations.
-    `git diff main -- crates` must be empty. Commit the cleanup before pushing.
+    Review `git diff main -- crates` against its documented engine differences;
+    they expose existing engine behaviour rather than Anvil inference rules.
 1. CLI `src/cliProgram.ts`, `src/programBase.ts`, `src/commands/validate.ts`,
     `src/services/depsCache.ts` and `src/CLILogger.ts`: startup and command loading.
 1. Fork `anvil/package.py`, `anvil/collect_release.py`, `anvil/npm/package.json`

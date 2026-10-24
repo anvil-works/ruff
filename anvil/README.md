@@ -12,15 +12,21 @@ historical evidence. Current implementation and release instructions follow.
 ## Current checker
 
 The maintained implementation is the native adapter in `anvil/native/`, using
-unchanged upstream engine crates from this Ruff repository. The `anvil` branch
+upstream engine crates from this Ruff repository. The `anvil` branch
 contains the Anvil changes above upstream `main`. See [native/README.md](native/README.md) for its
 behaviour and [PUBLISHING.md](PUBLISHING.md) for build and release instructions.
 The JavaScript/Python proof below is retained for historical comparisons and
 still needs anvil-pyright's compiled generators. Production packaging does not.
 
-Generic engine patches used in earlier trials have been removed. See
+Inference patches used in earlier trials have been removed. The browser adds
+only generic callable-parameter metadata to signature help. See
 [ENGINE_PATTERNS.md](ENGINE_PATTERNS.md) for accepted upstream typing limitations;
 historical diagnostic counts and packaged binaries describe their recorded sources.
+
+Browser IDE integration is being developed in [browser/](browser/README.md).
+It uses upstream ty WASM and shares portable Anvil declarations with the native
+adapter through `anvil/compat`. The browser's supported slice and outstanding
+compatibility work are recorded separately from CLI validation parity.
 
 ## Historical proof: run locally
 

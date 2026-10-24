@@ -1,4 +1,5 @@
 use std::any::Any;
+use std::num::NonZeroUsize;
 
 use js_sys::{Error, JsString};
 use ruff_db::Db as _;
@@ -29,6 +30,7 @@ use ty_project::{CheckMode, ProjectMetadata};
 use ty_project::{Db, ProjectDatabase, SemanticDb as _};
 use ty_python_core::program::FallibleStrategy;
 use ty_python_semantic::ProgramEnvironment;
+use ty_python_semantic::types::ide_support::has_callable_alternative;
 use wasm_bindgen::prelude::*;
 
 #[wasm_bindgen]
@@ -315,6 +317,23 @@ impl Workspace {
         Ok(source_text.to_string())
     }
 
+    /// Classifies a bare standard builtin without inferring its type.
+    #[wasm_bindgen(js_name = "isBuiltinReference")]
+    pub fn is_builtin_reference(
+        &self,
+        file_id: &FileHandle,
+        position: Position,
+    ) -> Result<bool, Error> {
+        let source = source_text(&self.db, file_id.file);
+        let index = line_index(&self.db, file_id.file);
+        let offset = position.to_text_size(&source, &index, self.position_encoding)?;
+        Ok(ty_ide::is_builtin_reference(
+            &self.db,
+            self.db.program_file(file_id.file),
+            offset,
+        ))
+    }
+
     #[wasm_bindgen(js_name = "gotoTypeDefinition")]
     pub fn goto_type_definition(
         &self,
@@ -521,13 +540,17 @@ impl Workspace {
         &self,
         file_id: &FileHandle,
         position: Position,
+        auto_import: Option<bool>,
     ) -> Result<Vec<Completion>, Error> {
         let source = source_text(&self.db, file_id.file);
         let index = line_index(&self.db, file_id.file);
 
         let offset = position.to_text_size(&source, &index, self.position_encoding)?;
 
-        let settings = ty_ide::CompletionSettings::default();
+        let settings = ty_ide::CompletionSettings {
+            auto_import: auto_import.unwrap_or(true),
+            ..ty_ide::CompletionSettings::default()
+        };
         let program_file = self.db.program_file(file_id.file);
         let env = ProgramEnvironment::from_file(program_file);
         let completions = ty_ide::completion(
@@ -557,6 +580,8 @@ impl Workspace {
                     }
                 });
                 Completion {
+                    scope_depth: comp.scope_depth,
+                    inheritance_depth: comp.inheritance_depth,
                     name,
                     kind,
                     detail: type_display,
@@ -569,6 +594,25 @@ impl Workspace {
                 }
             })
             .collect())
+    }
+
+    /// Prepares a bounded batch of auto-import symbols without editing source.
+    /// Restart at offset zero when the available modules change.
+    #[wasm_bindgen(js_name = "prepareCompletionIndex")]
+    pub fn prepare_completion_index(
+        &self,
+        file_id: &FileHandle,
+        offset: usize,
+        batch_size: usize,
+    ) -> Result<Option<usize>, Error> {
+        let batch_size = NonZeroUsize::new(batch_size)
+            .ok_or_else(|| Error::new("Completion index batch size must be positive"))?;
+        Ok(ty_ide::prepare_completion_index(
+            &self.db,
+            self.db.program_file(file_id.file),
+            offset,
+            batch_size,
+        ))
     }
 
     #[wasm_bindgen(js_name = "inlayHints")]
@@ -734,9 +778,9 @@ impl Workspace {
 
         let offset = position.to_text_size(&source, &index, self.position_encoding)?;
 
-        let Some(signature_help_info) =
-            signature_help(&self.db, self.db.program_file(file_id.file), offset)
-        else {
+        let file = self.db.program_file(file_id.file);
+        let env = ProgramEnvironment::from_file(file);
+        let Some(signature_help_info) = signature_help(&self.db, file, offset) else {
             return Ok(None);
         };
 
@@ -744,6 +788,12 @@ impl Workspace {
             .signatures
             .into_iter()
             .map(|sig| {
+                let active_parameter_expects_callable = sig
+                    .active_parameter
+                    .and_then(|index| sig.parameters.get(index))
+                    .is_some_and(|parameter| {
+                        has_callable_alternative(&self.db, &env, parameter.ty)
+                    });
                 let parameters = sig
                     .parameters
                     .into_iter()
@@ -760,6 +810,7 @@ impl Workspace {
                         .map(|docstring| docstring.render_plaintext()),
                     parameters,
                     active_parameter: sig.active_parameter.and_then(|p| u32::try_from(p).ok()),
+                    active_parameter_expects_callable,
                 }
             })
             .collect();
@@ -1342,6 +1393,8 @@ pub struct Hover {
 #[wasm_bindgen]
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Completion {
+    pub scope_depth: Option<u32>,
+    pub inheritance_depth: Option<u32>,
     #[wasm_bindgen(getter_with_clone)]
     pub name: String,
     pub kind: Option<CompletionKind>,
@@ -1502,6 +1555,8 @@ pub struct SignatureInformation {
     #[wasm_bindgen(getter_with_clone)]
     pub parameters: Vec<ParameterInformation>,
     pub active_parameter: Option<u32>,
+    /// Whether the active parameter has a known callable alternative.
+    pub active_parameter_expects_callable: bool,
 }
 
 #[wasm_bindgen]

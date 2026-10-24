@@ -96,7 +96,9 @@ pub fn completion<'db>(
             }
             CompletionTargetAst::Scoped(scoped) => {
                 let env = model.program_environment();
-                for semantic_completion in model.scoped_completions(scoped.node) {
+                for semantic_completion in
+                    model.scoped_completions(scoped.node, |name| completions.query.is_match(name))
+                {
                     let module_dependency_kind = if semantic_completion.builtin {
                         ModuleDependencyKind::Builtin
                     } else {
@@ -318,6 +320,8 @@ impl<'db> Extend<CompletionBuilder<'db>> for Completions<'db> {
 
 #[derive(Clone, Debug)]
 pub struct Completion<'db> {
+    pub scope_depth: Option<u32>,
+    pub inheritance_depth: Option<u32>,
     /// The name used when matching the query and ranking this suggestion.
     pub name: CompactString,
     /// The label shown to the user for this suggestion.
@@ -407,6 +411,8 @@ impl<'db> Completion<'db> {
 #[derive(Debug)]
 #[expect(clippy::struct_excessive_bools)]
 struct CompletionBuilder<'db> {
+    scope_depth: Option<u32>,
+    inheritance_depth: Option<u32>,
     // See comments on `Completion` for the meaning of fields.
     name: CompactString,
     qualified: Option<CompactString>,
@@ -431,6 +437,8 @@ impl<'db> CompletionBuilder<'db> {
     /// as is appropriate.
     fn new(name: impl Into<CompactString>) -> CompletionBuilder<'db> {
         CompletionBuilder {
+            scope_depth: None,
+            inheritance_depth: None,
             name: name.into(),
             qualified: None,
             insert: None,
@@ -454,11 +462,14 @@ impl<'db> CompletionBuilder<'db> {
     ) -> CompletionBuilder<'db> {
         let definition = semantic.ty.and_then(|ty| Definitions::from_ty(db, env, ty));
         let documentation = definition.and_then(|def| def.docstring(db));
-        Completion::builder(semantic.name)
+        let mut builder = Completion::builder(semantic.name)
             .ty(semantic.ty)
             .builtin(semantic.builtin)
             .type_check_only(semantic.is_type_check_only)
-            .docstring(documentation)
+            .docstring(documentation);
+        builder.scope_depth = semantic.scope_depth;
+        builder.inheritance_depth = semantic.inheritance_depth;
+        builder
     }
 
     /// A convenience constructor for a "keyword" completion.
@@ -557,6 +568,8 @@ impl<'db> CompletionBuilder<'db> {
                 )
             };
         Completion {
+            scope_depth: self.scope_depth,
+            inheritance_depth: self.inheritance_depth,
             name: self.name,
             label,
             qualified: self.qualified,

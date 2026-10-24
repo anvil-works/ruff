@@ -19,9 +19,10 @@ use crate::{
     },
     reachability::ReachabilityConstraintsExtension,
     types::{
-        ClassBase, ClassLiteral, KnownClass, ProgramEnvironment, StaticClassLiteral,
-        SubclassOfInner, Type, TypeVarBoundOrConstraints, UnionType, class::CodeGeneratorKind,
-        function::FunctionType, infer_definition_types, may_exist_at_runtime,
+        ClassBase, ClassLiteral, KnownClass, ModuleLiteralType, ProgramEnvironment,
+        StaticClassLiteral, SubclassOfInner, Type, TypeVarBoundOrConstraints, UnionType,
+        class::CodeGeneratorKind, function::FunctionType, infer_definition_types,
+        may_exist_at_runtime,
     },
 };
 use ty_python_core::{
@@ -52,6 +53,7 @@ pub(crate) fn all_end_of_scope_members<'db>(
                 .ignore_possibly_undefined()?;
             let symbol = table.symbol(symbol_id);
             let member = Member {
+                inheritance_depth: None,
                 name: symbol.name().clone(),
                 ty,
                 is_type_check_only: false,
@@ -73,6 +75,7 @@ pub(crate) fn all_end_of_scope_members<'db>(
 
                 let symbol = table.symbol(symbol_id);
                 let member = Member {
+                    inheritance_depth: None,
                     name: symbol.name().clone(),
                     ty,
                     is_type_check_only: false,
@@ -111,6 +114,7 @@ pub(crate) fn all_reachable_members<'db>(
                             .place
                             .ignore_possibly_undefined()?;
                         let member = Member {
+                            inheritance_depth: None,
                             name: symbol.name().clone(),
                             ty,
                             is_type_check_only: false,
@@ -128,6 +132,7 @@ pub(crate) fn all_reachable_members<'db>(
                     .and_then(|first_reachable_definition| {
                         let ty = place_with_definition.place.ignore_possibly_undefined()?;
                         let member = Member {
+                            inheritance_depth: None,
                             name: symbol.name().clone(),
                             ty,
                             is_type_check_only: false,
@@ -419,64 +424,86 @@ impl<'db> AllMembers<'db> {
             }
 
             Type::ModuleLiteral(literal) => {
-                let module = literal.module(db);
-                // Looking up `__file__` on `types.ModuleType` will not give as precise a type
-                // as we infer in type inference, but it's confusing if autocomplete etc.
-                // shows a different type in the tooltip to the one inferred by the type checker.
-                let dunder_file_type = if module.file(db).is_some() {
-                    KnownClass::Str.to_instance(db, env)
-                } else {
-                    Type::none(db, env)
-                };
-                self.members.insert(Member {
-                    name: Name::new_static("__file__"),
-                    ty: dunder_file_type,
-                    is_type_check_only: false,
-                });
-
-                self.extend_with_type(db, env, KnownClass::ModuleType.to_instance(db, env));
-
-                let Some(file) = module.file(db) else {
-                    return;
-                };
-                let program_file = ProgramFile::new(db, file, env.program(db));
-
-                let module_scope = global_scope(db, program_file);
-                let use_def_map = use_def_map(db, module_scope);
-                let place_table = place_table(db, module_scope);
-
-                for (symbol_id, _) in use_def_map.all_end_of_scope_symbol_declarations() {
-                    let symbol_name = place_table.symbol(symbol_id).name();
-                    let Place::Defined(defined) =
-                        imported_symbol(db, env, Some(program_file), symbol_name, None).place
-                    else {
-                        continue;
-                    };
-
-                    self.members.insert(Member {
-                        name: symbol_name.clone(),
-                        ty: defined.ty,
-                        is_type_check_only: defined
-                            .provenance
-                            .definition()
-                            .is_some_and(|definition| !may_exist_at_runtime(db, definition)),
-                    });
-                }
-
-                self.members
-                    .extend(literal.available_submodule_attributes(db).filter_map(
-                        |submodule_name| {
-                            let ty = literal.resolve_submodule(db, &submodule_name)?;
-                            let name = submodule_name.clone();
-                            Some(Member {
-                                name,
-                                ty,
-                                is_type_check_only: false,
-                            })
-                        },
-                    ));
+                self.extend_with_module_members(db, env, literal, &|_| true);
             }
         }
+    }
+
+    fn extend_with_module_members(
+        &mut self,
+        db: &'db dyn Db,
+        env: &ProgramEnvironment<'db>,
+        literal: ModuleLiteralType<'db>,
+        name_filter: &impl Fn(&str) -> bool,
+    ) {
+        let module = literal.module(db);
+        // Looking up `__file__` on `types.ModuleType` will not give as precise a type
+        // as we infer in type inference, but it's confusing if autocomplete etc.
+        // shows a different type in the tooltip to the one inferred by the type checker.
+        let dunder_file_type = if module.file(db).is_some() {
+            KnownClass::Str.to_instance(db, env)
+        } else {
+            Type::none(db, env)
+        };
+        self.members.insert(Member {
+            inheritance_depth: None,
+            name: Name::new_static("__file__"),
+            ty: dunder_file_type,
+            is_type_check_only: false,
+        });
+
+        self.extend_with_type(db, env, KnownClass::ModuleType.to_instance(db, env));
+
+        let Some(file) = module.file(db) else {
+            return;
+        };
+        let program_file = ProgramFile::new(db, file, env.program(db));
+
+        let module_scope = global_scope(db, program_file);
+        let use_def_map = use_def_map(db, module_scope);
+        let place_table = place_table(db, module_scope);
+
+        for (symbol_id, _) in use_def_map.all_end_of_scope_symbol_declarations() {
+            let symbol_name = place_table.symbol(symbol_id).name();
+            // Reject names before resolving their declarations and imported types.
+            if !name_filter(symbol_name) {
+                continue;
+            }
+            let Place::Defined(defined) =
+                imported_symbol(db, env, Some(program_file), symbol_name, None).place
+            else {
+                continue;
+            };
+
+            self.members.insert(Member {
+                inheritance_depth: None,
+                name: symbol_name.clone(),
+                ty: defined.ty,
+                is_type_check_only: defined
+                    .provenance
+                    .definition()
+                    .is_some_and(|definition| !may_exist_at_runtime(db, definition)),
+            });
+        }
+
+        self.members
+            .extend(
+                literal
+                    .available_submodule_attributes(db)
+                    .filter_map(|submodule_name| {
+                        if !name_filter(&submodule_name) {
+                            return None;
+                        }
+                        let ty = literal.resolve_submodule(db, &submodule_name)?;
+                        let name = submodule_name.clone();
+                        Some(Member {
+                            inheritance_depth: None,
+                            name,
+                            ty,
+                            is_type_check_only: false,
+                        })
+                    }),
+            );
     }
 
     /// Add members from `class_literal` (including following its
@@ -507,12 +534,13 @@ impl<'db> AllMembers<'db> {
         ty: Type<'db>,
         class_literal: ClassLiteral<'db>,
     ) {
-        for parent in class_literal
+        for (inheritance_depth, parent) in class_literal
             .iter_mro(db)
             .filter_map(ClassBase::into_class)
             .filter_map(|class| class.static_class_literal(db).map(|(lit, _)| lit))
+            .enumerate()
         {
-            self.extend_with_slot_members(db, env, ty, parent);
+            self.extend_with_slot_members(db, env, ty, parent, inheritance_depth);
 
             let parent_scope = parent.body_scope(db);
             for memberdef in all_end_of_scope_members(db, parent_scope) {
@@ -521,6 +549,7 @@ impl<'db> AllMembers<'db> {
                     continue;
                 };
                 self.members.insert(Member {
+                    inheritance_depth: u32::try_from(inheritance_depth).ok(),
                     name: memberdef.member.name,
                     ty,
                     is_type_check_only: memberdef.member.is_type_check_only,
@@ -543,6 +572,7 @@ impl<'db> AllMembers<'db> {
         env: &ProgramEnvironment<'db>,
         ty: Type<'db>,
         class_literal: StaticClassLiteral<'db>,
+        inheritance_depth: usize,
     ) {
         let Some(slots) = class_literal.slot_names(db) else {
             return;
@@ -554,6 +584,7 @@ impl<'db> AllMembers<'db> {
                 continue;
             };
             self.members.insert(Member {
+                inheritance_depth: u32::try_from(inheritance_depth).ok(),
                 name: name.clone(),
                 ty,
                 is_type_check_only: false,
@@ -589,12 +620,13 @@ impl<'db> AllMembers<'db> {
         env: &ProgramEnvironment<'db>,
         ty: Type<'db>,
         class_literal: StaticClassLiteral<'db>,
+        inheritance_depth: usize,
     ) {
         let class_body_scope = class_literal.body_scope(db);
         let program_file = class_body_scope.program_file(db);
         let index = semantic_index(db, program_file);
 
-        self.extend_with_slot_members(db, env, ty, class_literal);
+        self.extend_with_slot_members(db, env, ty, class_literal, inheritance_depth);
 
         for function_scope_id in attribute_scopes(db, class_body_scope) {
             for place_expr in index.place_table(function_scope_id).members() {
@@ -606,6 +638,7 @@ impl<'db> AllMembers<'db> {
                     continue;
                 };
                 self.members.insert(Member {
+                    inheritance_depth: u32::try_from(inheritance_depth).ok(),
                     name: Name::new(name),
                     ty,
                     is_type_check_only: false,
@@ -624,6 +657,7 @@ impl<'db> AllMembers<'db> {
                 continue;
             };
             self.members.insert(Member {
+                inheritance_depth: u32::try_from(inheritance_depth).ok(),
                 name: memberdef.member.name,
                 ty,
                 is_type_check_only: memberdef.member.is_type_check_only,
@@ -639,12 +673,19 @@ impl<'db> AllMembers<'db> {
         ty: Type<'db>,
         class_literal: StaticClassLiteral<'db>,
     ) {
-        for class in class_literal
+        for (inheritance_depth, class) in class_literal
             .iter_mro(db, None)
             .filter_map(ClassBase::into_class)
+            .enumerate()
         {
             if let Some((class_literal, _)) = class.static_class_literal(db) {
-                self.extend_with_instance_members_for_class(db, env, ty, class_literal);
+                self.extend_with_instance_members_for_class(
+                    db,
+                    env,
+                    ty,
+                    class_literal,
+                    inheritance_depth,
+                );
             }
         }
     }
@@ -687,6 +728,7 @@ impl<'db> AllMembers<'db> {
                     }) = ty.member(db, env, attr).place
                     {
                         self.members.insert(Member {
+                            inheritance_depth: None,
                             name: Name::from(*attr),
                             ty: synthetic_member,
                             is_type_check_only: false,
@@ -721,6 +763,7 @@ pub struct MemberWithDefinition<'db> {
 /// ordered comparisons.
 #[derive(Clone, Debug)]
 pub struct Member<'db> {
+    pub(crate) inheritance_depth: Option<u32>,
     pub(crate) name: Name,
     pub(crate) ty: Type<'db>,
     /// Whether this member is known to exist only during type checking.
@@ -933,4 +976,24 @@ pub(crate) fn all_members<'db>(
     ty: Type<'db>,
 ) -> FxHashSet<Member<'db>> {
     AllMembers::of(db, env, ty).members
+}
+
+/// List matching members, resolving module declarations only for matching names.
+pub(crate) fn all_members_filtered<'db>(
+    db: &'db dyn Db,
+    env: &ProgramEnvironment<'db>,
+    ty: Type<'db>,
+    name_filter: impl Fn(&str) -> bool,
+) -> FxHashSet<Member<'db>> {
+    let mut members = if let Type::ModuleLiteral(literal) = ty {
+        let mut members = AllMembers {
+            members: FxHashSet::default(),
+        };
+        members.extend_with_module_members(db, env, literal, &name_filter);
+        members.members
+    } else {
+        AllMembers::of(db, env, ty).members
+    };
+    members.retain(|member| name_filter(&member.name));
+    members
 }

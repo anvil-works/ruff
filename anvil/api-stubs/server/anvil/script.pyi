@@ -14,9 +14,9 @@ their content).
 
 Only readable from a running script (args passed via anvil.server.run_script() or anvil.server.launch_background_task()).
 
-[Anvil Docs](https://anvil.works/docs/background-tasks)"""
+[Anvil Docs](https://anvil.works/docs/server/background-tasks)"""
 
 return_value: Any
 """Set this from your script to return a value to anvil.server.run_script(). Defaults to None.
 
-[Anvil Docs](https://anvil.works/docs/background-tasks)"""
+[Anvil Docs](https://anvil.works/docs/server/background-tasks)"""
