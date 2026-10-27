@@ -15,9 +15,9 @@ finished after the checker exists on npm.
 The browser package has its own version in `anvil/browser/package.json`. A
 browser-only release does not require new native checker or Python-stub packages.
 The next browser candidate is `0.1.0-canary.3`; its typing packs remain
-`@anvil-works/python-stubs@0.1.0-canary.1`. This candidate only refines a browser
-API helper; the published native checker stays at `0.1.0-canary.1`. Recheck npm
-before publication: an existing version cannot be replaced.
+`@anvil-works/python-stubs@0.1.0-canary.1`. The published native checker stays at
+`0.1.0-canary.1`. Recheck npm before publication: an existing version cannot be
+replaced.
 
 1. Commit the reviewed browser source, including its new package version. From
     that clean checkout, run `pnpm install --frozen-lockfile`, `pnpm build` and

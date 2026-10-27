@@ -61,6 +61,7 @@ const producerAssignments = new Map();
 const rpcConsumers = new Map();
 const parsedSources = new Map();
 const parsedImports = new Map();
+let parsedCalls;
 const registrationPlans = new Map();
 // Inferred declarations survive edits outside their producer/import inputs.
 // Structural changes still discard them; Ty owns ordinary Python invalidation.
@@ -1454,7 +1455,7 @@ function importCompletions(handle, position) {
 // actual parameters while keeping argument expressions in the caller's runtime.
 function rpcCalls(handle, position) {
     const source = workspace.sourceText(handle);
-    const facts = JSON.parse(callFacts(source));
+    const facts = callsFor(source);
     const before = (a, b) => a.line < b.line || a.line === b.line && a.character <= b.character;
     return facts.arguments.flatMap(call => {
         if (position && !(before(call.range.start, position) && before(position, call.range.end))) return [];
@@ -1466,7 +1467,7 @@ function rpcCalls(handle, position) {
 
 function rpcProjection(handle, position) {
     const source = workspace.sourceText(handle);
-    const facts = JSON.parse(callFacts(source));
+    const facts = callsFor(source);
     const calls = rpcCalls(handle, position).filter(call => call.entry.contract);
     if (!calls.length) return;
     if (position) calls.splice(0, calls.length - 1);
@@ -1664,6 +1665,14 @@ function sourceInputs(paths) {
     return inputs;
 }
 
+// RPC checks and completion inspect the same text. Retain only its latest parse.
+function callsFor(source) {
+    if (parsedCalls?.source !== source) {
+        parsedCalls = { source, facts: JSON.parse(callFacts(source)) };
+    }
+    return parsedCalls.facts;
+}
+
 function importsFor(source) {
     let imports = parsedImports.get(source);
     if (!imports) parsedImports.set(source, (imports = JSON.parse(sourceImports(source))));
@@ -1689,7 +1698,7 @@ function rpcUses(path) {
     const handle = fileHandle(uriForPath(path));
     const needed = new Set();
     let dynamic = false;
-    const calls = JSON.parse(callFacts(workspace.sourceText(handle))).arguments;
+    const calls = callsFor(workspace.sourceText(handle)).arguments;
     for (const call of calls) {
         if (!call.values.length) continue;
         // Attribute calls locate the member after the callee starts. They cannot
@@ -2217,7 +2226,7 @@ function request(method, params) {
             const selected = mappedRange(path, item.textEdit.range);
             return selected ? { ...item, textEdit: { ...item.textEdit, range: selected } } : undefined;
         };
-        const calls = JSON.parse(callFacts(workspace.sourceText(handle)));
+        const calls = callsFor(workspace.sourceText(handle));
         const names = propertyValueCompletions(handle, position, calls.assignments) ??
             formHandleCompletions(params.textDocument.uri, handle, position, calls.arguments) ??
             namedArgumentCompletions(handle, position, calls.arguments);
