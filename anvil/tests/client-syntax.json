@@ -1,0 +1,104 @@
+[
+  {
+    "name": "assignment expression",
+    "source": "if (value := 42):\n    pass\n",
+    "lines": [
+      0
+    ]
+  },
+  {
+    "name": "positional-only parameters",
+    "source": "def f(value, /):\n    return value\n",
+    "lines": [
+      0
+    ]
+  },
+  {
+    "name": "match statement",
+    "source": "value = 42\nmatch value:\n    case 42:\n        pass\n",
+    "lines": [
+      1
+    ]
+  },
+  {
+    "name": "computed decorator",
+    "source": "decorators = [lambda value: value]\n@decorators[0]\ndef f():\n    pass\n",
+    "lines": [
+      1
+    ]
+  },
+  {
+    "name": "async comprehension",
+    "source": "async def values():\n    yield 1\nasync def f():\n    return [x async for x in values()]\n",
+    "lines": [
+      0,
+      2,
+      3
+    ]
+  },
+  {
+    "name": "await expression",
+    "source": "async def f():\n    await f()\n",
+    "lines": [
+      0,
+      1
+    ]
+  },
+  {
+    "name": "exception groups",
+    "source": "try:\n    pass\nexcept* Exception:\n    pass\n",
+    "lines": [
+      2
+    ]
+  },
+  {
+    "name": "type parameters",
+    "source": "def f[T](value: T) -> T:\n    return value\n",
+    "lines": [
+      0
+    ]
+  },
+  {
+    "name": "type statement",
+    "source": "type Pair = tuple[int, int]\n",
+    "lines": [
+      0
+    ]
+  },
+  {
+    "name": "template string",
+    "source": "name = 'Ada'\ntext = t'{name}'\n",
+    "lines": [
+      1
+    ]
+  },
+  {
+    "name": "reused f-string quotes",
+    "source": "value = {'name': 'Ada'}\ntext = f'{value['name']}'\n",
+    "lines": [
+      1
+    ]
+  },
+  {
+    "name": "ordinary f-string",
+    "source": "value = 42\ntext = f'value = {value}'\n",
+    "lines": []
+  },
+  {
+    "name": "quotes within a triple f-string",
+    "source": "value = {'name': 'Ada'}\ntext = f'''{value['name']}'''\n",
+    "lines": []
+  },
+  {
+    "name": "parenthesised with bindings",
+    "source": "def f(ctx):\n    with (ctx as first, ctx as second):\n        pass\n",
+    "lines": [
+      1
+    ]
+  },
+  {
+    "name": "parenthesised with expression",
+    "source": "def f(ctx):\n    with (ctx) as first:\n        pass\n",
+    "lines": []
+  }
+]

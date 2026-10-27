@@ -14,6 +14,7 @@ crate-type = ["rlib", "cdylib"]
 
 [dependencies]
 anyhow = "1"
+js-sys = { version = "0.3.100", optional = true }
 pep440_rs = { version = "0.7.3", optional = true }
 ruff_python_ast = { path = "../../crates/ruff_python_ast" }
 ruff_python_stdlib = { path = "../../crates/ruff_python_stdlib" }
@@ -28,7 +29,7 @@ toml = { version = "1", default-features = false, features = ["parse", "serde", 
 wasm-bindgen = { version = "0.2.123", optional = true }
 
 [features]
-browser = ["dep:wasm-bindgen", "dep:pep440_rs", "dep:toml"]
+browser = ["dep:wasm-bindgen", "dep:js-sys", "dep:pep440_rs", "dep:toml"]
 
 [build-dependencies]
 walkdir = "2"

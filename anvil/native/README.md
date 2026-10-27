@@ -149,6 +149,17 @@ reused. The proof requires a simple app package identifier.
 
 ### Property and runtime contracts
 
+Native validation and the IDE share Anvil runtime checks in `anvil/compat`:
+duplicate callable/background-task names, portable-class placement, navigation
+from `show` handlers, and unsupported Skulpt syntax. Registration checks include
+other modules when validating one file. Duplicate detection follows the IDE's
+static catalogue of module-level functions in Server Modules; methods, nested
+functions and dynamic registration names do not establish known collisions.
+API references are resolved through Ty, so aliases work and unrelated user
+functions do not trigger Anvil warnings.
+Row-model keyword errors use the API stub's explicit `__init_subclass__`
+signature and ordinary Ty argument diagnostics.
+
 Python-defined members take precedence over designer property declarations.
 Their getter, setter, class-field and constructor annotations determine the types;
 unannotated implementations retain ty's ordinary permissive checking. Designer

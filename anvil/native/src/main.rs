@@ -14,7 +14,7 @@ mod system;
 use anvil_ty_compat::tables;
 
 use anvil_ty_compat::{Source, identifier};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::time::Instant;
@@ -206,6 +206,11 @@ fn validate(app: &Path, files: &[PathBuf]) -> Result<Vec<Value>> {
             Ok((dependency.package.clone(), client, server, forms))
         })
         .collect::<Result<Vec<_>>>()?;
+    let server_paths: HashSet<_> = server
+        .iter()
+        .chain(dependencies.iter().flat_map(|(_, _, server, _)| server))
+        .map(|source| source.path.clone())
+        .collect();
     let mut models = models::Registry::default();
     models.collect(&client, &server, package);
     let forms = forms::designers(
@@ -408,8 +413,17 @@ fn validate(app: &Path, files: &[PathBuf]) -> Result<Vec<Value>> {
         db.freeze_open_files();
         db.freeze();
         if environment == "server" {
-            for path in origins.keys().filter(|path| path.extension() == Some("py")) {
-                callables.collect(&db, path, &root.join("stubs/anvil/server.pyi"))?;
+            for (path, origin) in origins
+                .iter()
+                .filter(|(path, _)| path.extension() == Some("py"))
+            {
+                let server_module = server_paths.contains(origin);
+                callables.collect(
+                    &db,
+                    path,
+                    &root.join("stubs/anvil/server.pyi"),
+                    server_module,
+                )?;
             }
         }
         if !selected.is_empty() {
@@ -427,7 +441,18 @@ fn validate(app: &Path, files: &[PathBuf]) -> Result<Vec<Value>> {
                 &root.join("stubs/anvil/server.pyi"),
             )?);
         }
+        let (duplicate_callables, duplicate_tasks) = callables.duplicates();
         for source in selected {
+            let mut context = handles.diagnostic_context(&source.path, environment == "client");
+            context.duplicate_callables = duplicate_callables.clone();
+            context.duplicate_tasks = duplicate_tasks.clone();
+            output.extend(checks::runtime(
+                &db,
+                &code.join(utf8(&source.relative)?),
+                &source.path,
+                &root.join("stubs/anvil"),
+                &context,
+            )?);
             output.extend(handles.check(
                 &db,
                 &code.join(utf8(&source.relative)?),
@@ -453,6 +478,24 @@ fn validate(app: &Path, files: &[PathBuf]) -> Result<Vec<Value>> {
         }
     }
     policy.apply(&mut output);
+    // Keep the checker error when it already explains unsupported syntax on a line.
+    let syntax_lines: HashSet<_> = output
+        .iter()
+        .filter(|item| item["rule"] == "invalid-syntax")
+        .filter_map(|item| {
+            item["file"]
+                .as_str()
+                .zip(item["range"]["start"]["line"].as_u64())
+        })
+        .map(|(file, line)| (file.to_owned(), line))
+        .collect();
+    output.retain(|item| {
+        item["rule"] != "reportAnvilUnsupportedSkulptSyntax"
+            || !item["file"]
+                .as_str()
+                .zip(item["range"]["start"]["line"].as_u64())
+                .is_some_and(|(file, line)| syntax_lines.contains(&(file.to_owned(), line)))
+    });
     Ok(output)
 }
 

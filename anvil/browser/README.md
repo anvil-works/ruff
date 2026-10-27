@@ -115,6 +115,15 @@ disabled only for app editors using semantic analysis. Explicit Ruff config is
 preserved, as are normal Ruff checks with the feature flag off or in extra Python
 files. Distinct Ty errors on one line are retained.
 
+Anvil runtime warnings come from `anvil/compat`, shared with native validation.
+They cover duplicate callable/background-task registrations, portable classes
+outside ordinary Modules, navigation during `show` handlers, and syntax that
+Skulpt cannot execute. Show handlers follow YAML bindings and resolved `handle`
+decorators, including their precedence over YAML bindings; aliases retain their
+meaning. Duplicate detection covers statically named module-level functions in
+Server Modules. Row-model keyword validation uses the API stub's explicit `__init_subclass__` signature. Generic missing-receiver and
+setter-name lint rules remain separate Ruff work.
+
 The build pins `@anvil-works/python-stubs@0.1.0-canary.1` from npm. Publish that
 reviewed package before running a clean hosted browser build. The browser workflow
 builds and tests the installed archive, then uploads it for review; it never

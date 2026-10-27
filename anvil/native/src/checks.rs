@@ -13,7 +13,8 @@ use ruff_source_file::PositionEncoding;
 use ruff_text_size::{Ranged, TextRange};
 use serde_json::{Value, json};
 use ty_project::ProjectDatabase;
-use ty_python_semantic::{Db as SemanticDb, SemanticModel};
+use ty_python_semantic::types::TypeDefinition;
+use ty_python_semantic::{Db as SemanticDb, HasType, SemanticModel};
 
 pub(crate) fn issue(
     db: &dyn Db,
@@ -153,5 +154,65 @@ pub fn imports(
     for stmt in &parsed.syntax().body {
         visitor.visit_stmt(stmt);
     }
+    if client {
+        visitor.issues.extend(
+            anvil_ty_compat::skulpt::syntax_diagnostics(source_text(db, file).as_str())
+                .into_iter()
+                .map(|diagnostic| {
+                    issue(
+                        db,
+                        file,
+                        origin,
+                        diagnostic.range,
+                        "reportAnvilUnsupportedSkulptSyntax",
+                        "warning",
+                        diagnostic.message,
+                    )
+                }),
+        );
+    }
     Ok(visitor.issues)
+}
+
+pub fn runtime(
+    db: &ProjectDatabase,
+    path: &SystemPath,
+    origin: &Path,
+    api_root: &SystemPath,
+    context: &anvil_ty_compat::diagnostics::Context,
+) -> Result<Vec<Value>> {
+    let file = system_path_to_file(db, path)?;
+    let model = SemanticModel::new(db, db.program_file(file));
+    let parsed = parsed_module(db, model.python_file()).load(db);
+    let diagnostics =
+        anvil_ty_compat::diagnostics::check(&parsed.syntax().body, context, |expression| {
+            let TypeDefinition::Function(definition) = expression
+                .inferred_type(&model)?
+                .definition(db, &model.program_environment())?
+            else {
+                return None;
+            };
+            let name = definition.name(db)?;
+            let module = match name.as_str() {
+                "portable_class" | "callable" | "background_task" => "server.pyi",
+                "open_form" | "handle" => "__init__.pyi",
+                _ => return None,
+            };
+            (definition.file(db) == system_path_to_file(db, &api_root.join(module)).ok()?)
+                .then_some(name)
+        });
+    Ok(diagnostics
+        .into_iter()
+        .map(|diagnostic| {
+            issue(
+                db,
+                file,
+                origin,
+                diagnostic.range,
+                diagnostic.rule,
+                "warning",
+                diagnostic.message,
+            )
+        })
+        .collect())
 }

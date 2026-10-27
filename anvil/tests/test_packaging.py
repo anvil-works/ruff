@@ -76,7 +76,12 @@ class Packaging(unittest.TestCase):
             ["node", "-p", "process.platform + '-' + process.arch"], text=True
         ).strip()
         self.assertEqual(npm["name"], f"@anvil-works/anvil-ty-{node_platform}")
-        self.assertEqual(npm["version"], "0.1.0-canary.0")
+        self.assertEqual(
+            npm["version"],
+            json.loads((harness.ROOT / "anvil/npm/package.json").read_text())[
+                "version"
+            ],
+        )
         snapshot = manifest["source_snapshot_at_packaging"]
         self.assertNotIn("anvil_pyright_revision", snapshot)
         self.assertIn("anvil_api_stubs", snapshot)

@@ -1,11 +1,11 @@
 import * as Comlink from './dist/comlink.mjs';
 import { stubPacks, completionPreferences } from './dist/stub-packs.mjs';
 import { projectContext, contextPosition, contextCompletion, originalCompletion } from './contexts.mjs';
-import { components, formPropertyTarget, handlerAnnotations } from './forms.mjs';
+import { visitForm, components, formPropertyTarget, handlerAnnotations } from './forms.mjs';
 import { projectAnnotations } from './source-projection.mjs';
 import { renameResource, renameComponent, componentAt, extendAnvilRename, rpcTarget, rpcTargets, rpcReferences, renameRpc, callableRegistrations } from './renames.mjs';
 import initialize, * as ty from './dist/wasm/ty_wasm.js';
-import initializeCompatibility, { Preparation, symbols, itemFacts, callFacts, literalOptions, renameNames, sourceImports, sourceUpdate, itemAssignments, dictionaryProbes, returnTypeDeclaration, rpcServerStub, rpcSignature, skulptModuleSupported, clientImportFacts, serverPackages, tyConfiguration, validRenameName as isPythonIdentifier } from './dist/compat/anvil_ty_compat.js';
+import initializeCompatibility, { Preparation, symbols, itemFacts, callFacts, literalOptions, renameNames, sourceImports, sourceUpdate, itemAssignments, dictionaryProbes, returnTypeDeclaration, rpcServerStub, rpcSignature, skulptModuleSupported, clientImportFacts, clientSyntaxDiagnostics, anvilDiagnostics, serverPackages, tyConfiguration, validRenameName as isPythonIdentifier } from './dist/compat/anvil_ty_compat.js';
 
 let workspace;
 let preparation;
@@ -578,7 +578,7 @@ function apiFunction(handle, position) {
         const name = selectedName(target);
         if (eventMethods.includes(name) && path.startsWith(`${root}/.anvil/analysis/`) && path.endsWith('/_anvil_designer.pyi')) return name;
         if (!path.startsWith(root + '/.anvil/types/')) continue;
-        const module = eventMethods.includes(name) ? '__init__' : { get_secret: 'secrets', encrypt_with_key: 'secrets', decrypt_with_key: 'secrets', open_form: '__init__', render_form: 'pdf', load_form: 'server', FormResponse: 'server', handle: '__init__', http_endpoint: 'server', route: 'server', handle_message: 'email', background_task: 'server', callable: 'server', call: 'server', call_s: 'server', launch_background_task: 'server' }[name];
+        const module = eventMethods.includes(name) ? '__init__' : { get_secret: 'secrets', encrypt_with_key: 'secrets', decrypt_with_key: 'secrets', open_form: '__init__', render_form: 'pdf', load_form: 'server', FormResponse: 'server', portable_class: 'server', handle: '__init__', http_endpoint: 'server', route: 'server', handle_message: 'email', background_task: 'server', callable: 'server', call: 'server', call_s: 'server', launch_background_task: 'server' }[name];
         if (module && path === `${root}/.anvil/types/${isServer ? 'server' : 'client'}/anvil/${module}.pyi`) return name;
     }
 }
@@ -608,6 +608,14 @@ function registrations() {
         }
         for (const item of result.entries)
             result[item.kind === 'callable' ? 'callables' : 'tasks'].push({ name: item.name, filePath: pathForUri(item.uri) });
+        for (const [group, field] of [['callables', 'duplicateCallables'], ['tasks', 'duplicateTasks']]) {
+            const seen = new Set();
+            result[field] = [...new Set(result[group].flatMap(item => {
+                const duplicate = seen.has(item.name);
+                seen.add(item.name);
+                return duplicate ? [item.name] : [];
+            }))];
+        }
     } finally { prepareApp(originalEnvironment); }
     return remoteRegistrations = result;
 }
@@ -1341,6 +1349,31 @@ function decoratorCompletions(handle, position, { imports, items }) {
     const match = /^(\s*)@([\p{ID_Continue}.]*)$/u.exec(lines[position.line].slice(0, position.character));
     if (!match) return [];
     const start = { line: position.line, character: match[1].length + 1 };
+    // An unfinished @ is outside the parsed class range. Complete that line as
+    // a statement to find its class, keeping other classes out of semantic probes.
+    // Ty then checks that each candidate's visible setter is property.setter.
+    const setters = match[2].includes('.') ? [] : withTemporarySources(snapshot => {
+        const completed = [...lines];
+        completed[position.line] = match[1] + 'pass';
+        const facts = JSON.parse(itemFacts(completed.join('\n')));
+        const owner = facts.classes.findLast(cls => cls.bodyStart?.character === match[1].length &&
+            cls.bodyStart.line <= position.line && cls.bodyEnd.line >= position.line);
+        if (!owner) return [];
+        const names = new Set(facts.functions.filter(fn =>
+            fn.owner === owner.id && fn.decorators.length && fn.range.start.line < position.line).map(fn => fn.name));
+        return [...names].flatMap(name => {
+            const label = `${name}.setter`;
+            if (!label.startsWith(match[2])) return [];
+            const edited = [...lines];
+            edited[position.line] = edited[position.line].slice(0, start.character) + label + edited[position.line].slice(position.character);
+            snapshot.replace(path, edited.join('\n'));
+            const targets = locations(workspace.gotoTypeDefinition(handles.get(path),
+                new ty.Position(position.line + 1, start.character + name.length + 2)));
+            if (!targets.some(target => target.uri === 'vendored://stdlib/builtins.pyi' && selectedName(target) === 'setter')) return [];
+            return [{ label, kind: 2, textEdit: { range: { start, end: position }, newText: label },
+                data: { insertParentheses: false } }];
+        });
+    });
     // Native suggestions retain imported aliases. Limit semantic probes to these
     // API names and their aliases, rather than checking every in-scope function.
     const required = ['handle', 'http_endpoint', 'route'];
@@ -1360,8 +1393,8 @@ function decoratorCompletions(handle, position, { imports, items }) {
                 item.data = { ...item.data, insertParentheses: true };
         }
     });
-    if (!isServer) return [];
-    return withTemporarySources(snapshot => ['callable', 'background_task', 'http_endpoint', 'route'].flatMap(name => {
+    if (!isServer) return setters;
+    return setters.concat(withTemporarySources(snapshot => ['callable', 'background_task', 'http_endpoint', 'route'].flatMap(name => {
         const label = `anvil.server.${name}`;
         if (!label.startsWith(match[2])) return [];
         const edited = [...lines];
@@ -1379,7 +1412,7 @@ function decoratorCompletions(handle, position, { imports, items }) {
         }
         return [{ label, kind: 3, textEdit: { range: { start, end: position }, newText: label }, additionalTextEdits,
             data: { insertParentheses: name === 'http_endpoint' || name === 'route' } }];
-    }));
+    })));
 }
 
 function importCompletions(handle, position) {
@@ -2032,6 +2065,29 @@ function request(method, params) {
                 } finally { diagnostic.free(); }
             }).filter(Boolean);
         });
+        if (sourceEnvironments.size && path.endsWith('.py')) {
+            const source = workspace.sourceText(fileHandle(params.textDocument.uri));
+            const declaresRegistration = isServer && sourceFacts(source).functions.some(fn => fn.owner === null &&
+                fn.decorators.some(decorator => ['callable', 'background_task'].includes(
+                    apiFunction(fileHandle(params.textDocument.uri), decorator.position))));
+            const remote = declaresRegistration ? registrations() : undefined;
+            const target = fileHandle(params.textDocument.uri);
+            const form = formCatalogue.find(form => form.uri === params.textDocument.uri);
+            const showHandlers = {};
+            if (form) visitForm(form.data, (node, _path, component) => {
+                const handler = node.event_bindings?.show;
+                if (typeof handler === 'string') showHandlers[node === form.data.layout ? 'layout' : component ?? ''] = handler;
+                const rootHandler = node.form_event_bindings?.show;
+                if (typeof rootHandler === 'string') showHandlers[''] = rootHandler;
+            });
+            const context = { client: !isServer, formClass: formClasses.get(pathForUri(params.textDocument.uri)),
+                duplicateCallables: remote?.duplicateCallables, duplicateTasks: remote?.duplicateTasks, showHandlers };
+            for (const diagnostic of JSON.parse(anvilDiagnostics(workspace.sourceText(target), JSON.stringify(context),
+                (line, character) => apiFunction(target, { line, character })))) {
+                const selected = mappedRange(path, diagnostic.range);
+                if (selected && originalRange(path, selected)) items.push({ ...diagnostic, range: selected, source: 'anvil', severity: 2 });
+            }
+        }
         if (isServer && !Object.keys(configuration.options.rules ?? {}).some(rule => ['all', 'unresolved-import'].includes(rule))) {
             const appPackages = new Set(['anvil', ...Object.values(appConfigs).map(config => config.package_name ?? 'main_app_package')]);
             const imports = importsFor(sourceText(params.textDocument.uri));
@@ -2046,6 +2102,12 @@ function request(method, params) {
         }
         if (!isServer && sourceEnvironments.size && path.endsWith('.py')) {
             const target = fileHandle(params.textDocument.uri);
+            const syntaxLines = new Set(items.filter(item => item.code === 'invalid-syntax').map(item => item.range.start.line));
+            for (const diagnostic of JSON.parse(clientSyntaxDiagnostics(workspace.sourceText(target)))) {
+                const selected = mappedRange(path, diagnostic.range);
+                if (selected && !syntaxLines.has(selected.start.line) && originalRange(path, selected)) items.push({ ...diagnostic, range: selected,
+                    code: 'reportAnvilUnsupportedSkulptSyntax', source: 'anvil', severity: 2 });
+            }
             for (const imported of JSON.parse(clientImportFacts(workspace.sourceText(target))).imports) {
                 if (imported.resolve) {
                     // Definition follows re-exports (collections.abc points at an

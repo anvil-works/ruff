@@ -57,3 +57,18 @@ test('own instance members rank above inherited members and expand from self pre
     assert(expanded.some(item => item.label === 'self.z_local'), JSON.stringify(expanded.map(item => item.label)));
     assert(expanded.some(item => item.label === 'self.inherited_a'));
 }));
+
+test('property setter decorators expand from @ and a partial property name', () => withBrowser(async page => {
+    const prefix = 'class Other:\n    @property\n    def elsewhere(self): return 0\n' +
+        'class Example:\n    @property\n    def foo(self): return 42\n    ';
+    const [bare, partial, member] = await complete(page, [prefix + '@¦', prefix + '@f¦', prefix + '@foo.¦']);
+    for (const items of [bare, partial]) {
+        const setter = items.find(item => item.label === 'foo.setter');
+        assert(setter, JSON.stringify(items.map(item => item.label)));
+        assert.equal(setter.textEdit.newText, 'foo.setter');
+        assert.equal(setter.data.insertParentheses, false);
+        assert(!items.some(item => item.label === 'elsewhere.setter'));
+    }
+    assert.equal(partial.find(item => item.label === 'foo.setter').textEdit.range.start.character, 5);
+    assert(member.some(item => item.label === 'setter'));
+}));

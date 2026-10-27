@@ -3,6 +3,7 @@ use serde_json::Value;
 use std::path::PathBuf;
 
 pub mod dependencies;
+pub mod diagnostics;
 pub mod dom;
 pub mod forms;
 pub mod imports;

@@ -18,10 +18,18 @@ impl<'a> Positions<'a> {
     }
 
     pub(crate) fn at(&self, offset: TextSize) -> Value {
+        let (line, character) = self.coordinates(offset);
+        json!({ "line": line, "character": character })
+    }
+
+    pub(crate) fn coordinates(&self, offset: TextSize) -> (usize, usize) {
         let location = self
             .lines
             .source_location(offset, self.source, PositionEncoding::Utf16);
-        json!({ "line": location.line.to_zero_indexed(), "character": location.character_offset.to_zero_indexed() })
+        (
+            location.line.to_zero_indexed(),
+            location.character_offset.to_zero_indexed(),
+        )
     }
 
     /// Insert analysis imports after the module docstring and future imports.

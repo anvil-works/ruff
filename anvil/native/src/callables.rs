@@ -1,5 +1,5 @@
 //! Runtime callable names, resolved through ty so aliases and shadowing retain meaning.
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::path::Path;
 
 use anyhow::Result;
@@ -18,14 +18,28 @@ use ty_python_semantic::{Db, HasType, SemanticModel};
 pub struct Registry {
     names: HashSet<String>,
     tasks: HashSet<String>,
+    callable_counts: HashMap<String, usize>,
+    task_counts: HashMap<String, usize>,
 }
 
 impl Registry {
+    pub fn duplicates(&self) -> (HashSet<String>, HashSet<String>) {
+        let repeated = |counts: &HashMap<String, usize>| {
+            counts
+                .iter()
+                .filter(|(_, count)| **count > 1)
+                .map(|(name, _)| name.clone())
+                .collect()
+        };
+        (repeated(&self.callable_counts), repeated(&self.task_counts))
+    }
+
     pub fn collect(
         &mut self,
         db: &ProjectDatabase,
         path: &SystemPath,
         api: &SystemPath,
+        server_module: bool,
     ) -> Result<()> {
         let file = system_path_to_file(db, path)?;
         let model = SemanticModel::new(db, db.program_file(file));
@@ -34,6 +48,7 @@ impl Registry {
             model,
             api: system_path_to_file(db, api)?,
             registry: self,
+            module_registration: server_module,
         };
         for stmt in &parsed.syntax().body {
             visitor.visit_stmt(stmt);
@@ -69,27 +84,24 @@ struct Registrations<'db, 'r> {
     model: SemanticModel<'db>,
     api: File,
     registry: &'r mut Registry,
+    module_registration: bool,
 }
 
 impl<'ast> Visitor<'ast> for Registrations<'_, '_> {
     fn visit_stmt(&mut self, stmt: &'ast Stmt) {
         if let Stmt::FunctionDef(function) = stmt {
             for decorator in &function.decorator_list {
-                let (expr, custom_name) = match &decorator.expression {
-                    Expr::Call(call) => (
-                        call.func.as_ref(),
-                        call.arguments.args.first().and_then(string).or_else(|| {
-                            call.arguments.keywords.iter().find_map(|keyword| {
-                                if keyword.arg.as_ref().is_some_and(|arg| arg == "name") {
-                                    string(&keyword.value)
-                                } else {
-                                    None
-                                }
-                            })
-                        }),
-                    ),
-                    expr => (expr, None),
+                let expr = match &decorator.expression {
+                    Expr::Call(call) => call.func.as_ref(),
+                    expression => expression,
                 };
+                let registration_name = anvil_ty_compat::diagnostics::registration_name(
+                    &decorator.expression,
+                    function.name.as_str(),
+                );
+                // Keep the existing gradual fallback for known-name discovery;
+                // only statically named registrations can establish duplicates.
+                let name = registration_name.unwrap_or(function.name.as_str());
                 let Some(ty) = expr.inferred_type(&self.model) else {
                     continue;
                 };
@@ -101,19 +113,38 @@ impl<'ast> Visitor<'ast> for Registrations<'_, '_> {
                 if definition.file(self.model.db()) == self.api {
                     match definition.name(self.model.db()).as_deref() {
                         Some("callable") => {
-                            self.registry
-                                .names
-                                .insert(custom_name.unwrap_or(function.name.as_str()).to_owned());
+                            self.registry.names.insert(name.to_owned());
+                            if self.module_registration && registration_name.is_some() {
+                                *self
+                                    .registry
+                                    .callable_counts
+                                    .entry(name.to_owned())
+                                    .or_default() += 1;
+                            }
                         }
                         Some("background_task") => {
-                            self.registry.tasks.insert(function.name.to_string());
+                            self.registry.tasks.insert(name.to_owned());
+                            if self.module_registration && registration_name.is_some() {
+                                *self
+                                    .registry
+                                    .task_counts
+                                    .entry(name.to_owned())
+                                    .or_default() += 1;
+                            }
                         }
                         _ => {}
                     }
                 }
             }
         }
+        // Preserve existing known-name discovery. Duplicate warnings use the
+        // IDE catalogue's ownership: module-level Server Module functions.
+        let module_registration = self.module_registration;
+        if matches!(stmt, Stmt::FunctionDef(_) | Stmt::ClassDef(_)) {
+            self.module_registration = false;
+        }
         walk_stmt(self, stmt);
+        self.module_registration = module_registration;
     }
 }
 

@@ -18,6 +18,7 @@ struct Form {
     name: String,
     events: Option<BTreeSet<String>>,
     components: BTreeMap<String, String>,
+    show_handlers: HashMap<String, String>,
 }
 
 #[derive(Default)]
@@ -27,6 +28,22 @@ pub struct Registry {
 }
 
 impl Registry {
+    pub fn diagnostic_context(
+        &self,
+        origin: &Path,
+        client: bool,
+    ) -> anvil_ty_compat::diagnostics::Context {
+        let form = self.forms.get(origin);
+        anvil_ty_compat::diagnostics::Context {
+            client,
+            form_class: form.map(|form| form.name.clone()),
+            show_handlers: form
+                .map(|form| form.show_handlers.clone())
+                .unwrap_or_default(),
+            ..Default::default()
+        }
+    }
+
     pub fn collect(
         &mut self,
         source: PathBuf,
@@ -66,9 +83,10 @@ impl Registry {
         self.forms.insert(
             source,
             Form {
-                name: name.to_owned(),
+                name: anvil_ty_compat::forms::class_name(template, name).to_owned(),
                 events,
                 components,
+                show_handlers: anvil_ty_compat::diagnostics::show_handlers(template),
             },
         );
     }

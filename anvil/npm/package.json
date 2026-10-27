@@ -1,6 +1,6 @@
 {
   "name": "@anvil-works/anvil-ty",
-  "version": "0.1.0-canary.0",
+  "version": "0.1.0-canary.1",
   "description": "Native Python validation for Anvil apps",
   "license": "MIT",
   "main": "index.cjs",
@@ -13,11 +13,11 @@
     "directory": "anvil/npm"
   },
   "optionalDependencies": {
-    "@anvil-works/anvil-ty-darwin-arm64": "0.1.0-canary.0",
-    "@anvil-works/anvil-ty-darwin-x64": "0.1.0-canary.0",
-    "@anvil-works/anvil-ty-linux-arm64": "0.1.0-canary.0",
-    "@anvil-works/anvil-ty-linux-x64": "0.1.0-canary.0",
-    "@anvil-works/anvil-ty-win32-x64": "0.1.0-canary.0"
+    "@anvil-works/anvil-ty-darwin-arm64": "0.1.0-canary.1",
+    "@anvil-works/anvil-ty-darwin-x64": "0.1.0-canary.1",
+    "@anvil-works/anvil-ty-linux-arm64": "0.1.0-canary.1",
+    "@anvil-works/anvil-ty-linux-x64": "0.1.0-canary.1",
+    "@anvil-works/anvil-ty-win32-x64": "0.1.0-canary.1"
   },
   "publishConfig": {
     "access": "public"
