@@ -11,14 +11,26 @@ test('builtin reference classification preserves shadowing and project overrides
         const cases = [
             ['¦str(1)', true],
             ['¦missing(1)', false],
+            ['from helpers import *\n¦str(1)', true],
+            ['from missing import *\n¦str(1)', false],
+            ['from bridge import *\n¦str(1)', false],
+            ['from dynamic import *\n¦str(1)', false],
+            ['from finite import *\n¦str(1)', true],
+            ['from finite_shadow import *\n¦str(1)', false],
+            ['def f():\n    from helpers import *\n    ¦str(1)', false],
             ['import builtins\nbuiltins.¦str(1)', false],
-            ['from .api import str\n¦str("greet")', false],
-            ['from .api import *\n¦str("greet")', false],
-            ['if True:\n    from .api import *\n¦str("greet")', false],
+            ['from api import str\n¦str("greet")', false],
+            ['from api import *\n¦str("greet")', false],
+            ['if True:\n    from api import *\n¦str("greet")', false],
             ['str = remote\n¦str("greet")', false],
             ['def f(str):\n    ¦str("greet")', false],
         ];
         const api = workspace.openFile('/app/api.py', 'def str(name): return 42\n');
+        let helpers = workspace.openFile('/app/helpers.py', 'def helper(): pass\n');
+        const bridge = workspace.openFile('/app/bridge.py', 'from missing import *\n');
+        const dynamic = workspace.openFile('/app/dynamic.py', 'def __getattr__(name): ...\n__all__ = discover_exports()\n');
+        const finite = workspace.openFile('/app/finite.py', '__all__ = ["helper"]\ndef __getattr__(name): ...\n');
+        const finiteShadow = workspace.openFile('/app/finite_shadow.py', '__all__ = ["str"]\ndef __getattr__(name): ...\n');
         try {
             const actual = cases.map(([marked]) => {
                 const offset = marked.indexOf('¦');
@@ -29,16 +41,26 @@ test('builtin reference classification preserves shadowing and project overrides
                     return workspace.isBuiltinReference(source, new ty.Position(lines.length, lines.at(-1).length + 1));
                 } finally { workspace.closeFile(source); }
             });
+            const main = workspace.openFile('/app/main.py', 'from helpers import *\nstr(1)');
+            const classify = () => workspace.isBuiltinReference(main, new ty.Position(2, 1));
+            const changedExports = [classify()];
+            for (const code of ['def str(name): return 42\n', 'def __getattr__(name): ...\n', 'def helper(): pass\n']) {
+                workspace.closeFile(helpers);
+                helpers = workspace.openFile('/app/helpers.py', code);
+                changedExports.push(classify());
+            }
+            main.free();
             const custom = new ty.Workspace('/custom', ty.PositionEncoding.Utf16, {});
             const override = custom.openFile('/custom/__builtins__.pyi', 'def str(name: str) -> int: ...\n');
             const source = custom.openFile('/custom/main.py', 'str("greet")');
             try {
-                return { actual, expected: cases.map(([, expected]) => expected),
+                return { actual, expected: cases.map(([, expected]) => expected), changedExports,
                     overridden: custom.isBuiltinReference(source, new ty.Position(1, 1)) };
             } finally { source.free(); override.free(); custom.free(); }
-        } finally { api.free(); workspace.free(); }
+        } finally { finiteShadow.free(); finite.free(); dynamic.free(); bridge.free(); helpers.free(); api.free(); workspace.free(); }
     });
     assert.deepEqual(result.actual, result.expected);
+    assert.deepEqual(result.changedExports, [true, false, false, true], 'Target edits invalidate the builtin proof without editing its importer');
     assert.equal(result.overridden, false);
 }));
 

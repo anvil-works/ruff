@@ -14,11 +14,10 @@ finished after the checker exists on npm.
 
 The browser package has its own version in `anvil/browser/package.json`. A
 browser-only release does not require new native checker or Python-stub packages.
-The next browser candidate is `0.1.0-canary.2`; its typing packs remain
-`@anvil-works/python-stubs@0.1.0-canary.1`. The corresponding native checker
-candidate is `0.1.0-canary.1`. This round changes shared diagnostics, so publish
-both browser and native packages. Recheck npm before publication: an existing
-version cannot be replaced.
+The next browser candidate is `0.1.0-canary.3`; its typing packs remain
+`@anvil-works/python-stubs@0.1.0-canary.1`. This candidate only refines a browser
+API helper; the published native checker stays at `0.1.0-canary.1`. Recheck npm
+before publication: an existing version cannot be replaced.
 
 1. Commit the reviewed browser source, including its new package version. From
     that clean checkout, run `pnpm install --frozen-lockfile`, `pnpm build` and
@@ -27,8 +26,13 @@ version cannot be replaced.
     browser version and `sourceDirty: false`. Pack outside the source checkout
     with `pnpm pack --pack-destination "$(mktemp -d)"` and test that exact archive
     through the installed-package browser smoke before publishing it.
-1. Stu publishes the reviewed archive with `npm publish <archive> --access public  --tag canary`. The new completion preparation protocol requires the new
-    browser package; the IDE must not ship that protocol with the older canary.
+1. Before npm publication, push the reviewed source and run Anvil's **Python
+    completion performance** workflow on the IDE feature branch, setting
+    `ty_ref` to that full source SHA. This compares the candidate with the IDE's
+    installed release on the same Linux runner. Require its compatibility and
+    performance checks to pass with unchanged budgets.
+1. Stu publishes the reviewed archive with
+    `npm publish <archive> --access public --tag canary`.
 1. Install the exact published browser version in Anvil and regenerate its
     registry lockfile. Update `test/analysis/performance/ty-source.json` to the
     same source revision. Run frontend, installed-package acceptance and

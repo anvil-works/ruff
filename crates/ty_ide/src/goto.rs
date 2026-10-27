@@ -8,7 +8,6 @@ use std::borrow::Cow;
 
 use crate::NavigationTarget;
 use crate::stub_mapping::StubMapper;
-use ruff_db::PythonFile;
 use ruff_db::parsed::ParsedModuleRef;
 use ruff_python_ast::find_node::{CoveringNode, covering_node};
 use ruff_python_ast::token::{Token, TokenAt, TokenKind, Tokens};
@@ -35,9 +34,9 @@ use ty_python_semantic::{
 /// Shadowed names and attributes return `false`; no type inference is required.
 pub fn is_builtin_reference(db: &dyn Db, file: ProgramFile<'_>, offset: TextSize) -> bool {
     let python_file = file.python_file(db);
-    // A star import can shadow a builtin without creating a named binding in
-    // the place table. Leave these cases to ordinary type-based resolution.
-    if has_star_import(db, python_file) {
+    // Known star exports already have named bindings in the semantic index.
+    // Unknown exports must retain ordinary type-based resolution.
+    if !has_known_star_imports(db, file) {
         return false;
     }
     let parsed = ruff_db::parsed::parsed_module(db, python_file).load(db);
@@ -56,27 +55,74 @@ pub fn is_builtin_reference(db: &dyn Db, file: ProgramFile<'_>, offset: TextSize
     model.definitely_has_builtin_binding(name.id.as_str(), name.into())
 }
 
-// RPC discovery probes many calls in the same file. Cache this source-only fact
-// so each probe does not walk the entire file again; source edits invalidate it.
+// RPC discovery probes many calls in one file. Cache this check, including its
+// resolver and target-source dependencies, rather than revisiting imports per call.
 #[salsa::tracked(returns(copy))]
-fn has_star_import(db: &dyn Db, file: PythonFile<'_>) -> bool {
-    let parsed = ruff_db::parsed::parsed_module(db, file).load(db);
+fn has_known_star_imports(db: &dyn Db, file: ProgramFile<'_>) -> bool {
+    let parsed = ruff_db::parsed::parsed_module(db, file.python_file(db)).load(db);
     let mut imports = StarImports::default();
     imports.visit_body(&parsed.syntax().body);
-    imports.0
+    if imports.nested_star {
+        return false;
+    }
+    let model = SemanticModel::new(db, file);
+    imports.imports.iter().all(|import| {
+        let Some(target) = model
+            .resolve_module(
+                import.module.as_ref().map(|name| name.as_str()),
+                import.level,
+            )
+            .and_then(|module| module.file(db))
+        else {
+            return false;
+        };
+        let target = ProgramFile::new(db, target, file.program(db));
+        let (has_star, has_getattr) = star_export_shape(db, target);
+        // Keep re-export chains conservative, including unresolved transitive
+        // imports. A finite __all__ also bounds module-level __getattr__ exports.
+        !has_star
+            && (!has_getattr
+                || ty_python_core::static_dunder_all::static_dunder_all(db, target).is_some())
+    })
+}
+
+#[salsa::tracked(returns(copy))]
+fn star_export_shape(db: &dyn Db, file: ProgramFile<'_>) -> (bool, bool) {
+    let parsed = ruff_db::parsed::parsed_module(db, file.python_file(db)).load(db);
+    let mut imports = StarImports::default();
+    imports.visit_body(&parsed.syntax().body);
+    if !imports.imports.is_empty() {
+        return (true, false);
+    }
+    let table = ty_python_core::place_table(db, ty_python_core::global_scope(db, file));
+    let has_getattr = table
+        .symbol_by_name("__getattr__")
+        .is_some_and(|symbol| symbol.is_bound() || symbol.is_declared());
+    (false, has_getattr)
 }
 
 #[derive(Default)]
-struct StarImports(bool);
+struct StarImports<'a> {
+    imports: Vec<&'a ast::StmtImportFrom>,
+    nested: bool,
+    nested_star: bool,
+}
 
-impl<'a> Visitor<'a> for StarImports {
+impl<'a> Visitor<'a> for StarImports<'a> {
     fn visit_stmt(&mut self, statement: &'a ast::Stmt) {
-        if let ast::Stmt::ImportFrom(import) = statement
-            && import.names.iter().any(|alias| alias.name.as_str() == "*")
-        {
-            self.0 = true;
-        } else if !self.0 {
-            walk_stmt(self, statement);
+        match statement {
+            ast::Stmt::ImportFrom(import)
+                if import.names.iter().any(|alias| alias.name.as_str() == "*") =>
+            {
+                self.imports.push(import);
+                self.nested_star |= self.nested;
+            }
+            ast::Stmt::FunctionDef(_) | ast::Stmt::ClassDef(_) => {
+                let nested = std::mem::replace(&mut self.nested, true);
+                walk_stmt(self, statement);
+                self.nested = nested;
+            }
+            _ => walk_stmt(self, statement),
         }
     }
 

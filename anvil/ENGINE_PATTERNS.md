@@ -18,14 +18,16 @@ Generic WASM API extensions expose existing engine behaviour:
 - `Workspace.isBuiltinReference` returns `true` only for a bare name proven to
     use a standard builtin. It exposes the existing semantic binding check without
     inferring the reference's type. Shadowed names, attributes, project builtin
-    overrides and files containing star imports return `false`. This is a
+    overrides and unknown star imports return `false`. Resolved leaf-module star
+    imports use upstream's binding table; re-export chains, invalid nested stars
+    and unbounded module `__getattr__` retain the conservative fallback. This is a
     conservative proof: `false` means callers must use ordinary resolution, not
     that the reference cannot be a builtin. The RPC adapter uses it to avoid
     resolving standard builtin calls as possible server calls. The star-import
-    check is cached per parsed file using native source invalidation, so probing
-    several calls does not repeatedly scan the file. The adapter uses existing
-    parsed call ranges to skip this proof for attribute calls, which still use
-    ordinary API resolution.
+    check is cached per program file, with resolver and imported-source
+    invalidation, so probing several calls does not repeatedly scan the file.
+    The adapter uses existing parsed call ranges to skip this proof for attribute
+    calls, which still use ordinary API resolution.
 
 These do not change inference rules. Keep these API extensions separate from Anvil
 compatibility logic and remove each local difference when an equivalent upstream
