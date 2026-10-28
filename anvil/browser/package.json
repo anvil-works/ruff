@@ -1,6 +1,6 @@
 {
   "name": "@anvil-works/anvil-ty-browser",
-  "version": "0.1.0-canary.4",
+  "version": "0.1.0-canary.5",
   "type": "module",
   "scripts": {
     "build:comlink": "node build-comlink.mjs",

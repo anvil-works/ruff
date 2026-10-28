@@ -1078,20 +1078,21 @@ function propertyValueCompletions(handle, position, assignments) {
     return literalCompletions(source, call, position, { names });
 }
 
-function hiddenTableDeletion(handle, position) {
+function hiddenTableDeletion(handle, position, receiver) {
     const lines = workspace.sourceText(handle).split('\n');
     const prefix = lines[position.line].slice(0, position.character);
-    const member = /\.([\p{ID_Continue}_]*)$/u.exec(prefix);
+    const member = (receiver ? /([\p{ID_Continue}_]*)$/u : /\.([\p{ID_Continue}_]*)$/u).exec(prefix);
     if (!member) return false;
     const start = position.character - member[1].length;
     const path = handle.path();
     // Hiding by label would also hide an author's unrelated method. Resolve the
     // completed member in a temporary copy and suppress only the documented
     // bulk-delete API, which Anvil deliberately excludes from suggestions.
-    lines[position.line] = lines[position.line].slice(0, start) + 'delete_all_rows' + lines[position.line].slice(position.character);
+    const qualifier = receiver ? `${receiver}.` : '';
+    lines[position.line] = lines[position.line].slice(0, start) + qualifier + 'delete_all_rows' + lines[position.line].slice(position.character);
     return withTemporarySources(snapshot => {
         snapshot.replace(path, lines.join('\n'));
-        const targets = locations(workspace.gotoDefinition(handles.get(path), new ty.Position(position.line + 1, start + 1)));
+        const targets = locations(workspace.gotoDefinition(handles.get(path), new ty.Position(position.line + 1, start + qualifier.length + 1)));
         return targets.length > 0 && targets.every(target =>
             target.uri === uriForPath(`${root}/.anvil/types/${isServer ? 'server' : 'client'}/anvil/tables/__init__.pyi`) &&
             selectedName(target) === 'delete_all_rows');
@@ -1305,25 +1306,6 @@ function namedArgumentCompletions(handle, position, calls) {
         }));
     }
     return eventMethods.includes(api) ? { ...result, includePython: false } : result;
-}
-
-function selfMemberCompletions(handle, position, prefix, mapItem) {
-    if (prefix !== 'sel' && prefix !== 'self') return [];
-    const path = handle.path();
-    const lines = workspace.sourceText(handle).split('\n');
-    const start = position.character - prefix.length;
-    lines[position.line] = lines[position.line].slice(0, start) + 'self.' + lines[position.line].slice(position.character);
-    const at = { line: position.line, character: start + 'self.'.length };
-    return withTemporarySources(snapshot => {
-        snapshot.replace(path, lines.join('\n'));
-        const projected = handles.get(path);
-        const items = workspace.completions(projected, new ty.Position(at.line + 1, at.character + 1), false).flatMap(mapItem);
-        const hideDeletion = items.some(item => item.label === 'delete_all_rows') && hiddenTableDeletion(projected, at);
-        return items.filter(item => !hideDeletion || item.label !== 'delete_all_rows').map(item => ({
-            ...item, label: `self.${item.label}`, insertText: `self.${item.insertText ?? item.label}`,
-            data: { ...item.data, implicitSelf: true },
-        }));
-    });
 }
 
 function callableArgument(handle, position, calls) {
@@ -2244,7 +2226,8 @@ function request(method, params) {
             .map(plan => JSON.stringify([plan.generatedName, plan.generatedType])));
         if (params.context?.autoImport === 'only' && !completionIndexes.get(workspace)?.complete)
             return { isIncomplete: true, preparationRequired: true, items: [] };
-        const native = workspace.completions(completionHandle, queryPosition(completionHandle, params.position), params.context?.autoImport !== false);
+        const native = workspace.completions(completionHandle, queryPosition(completionHandle, params.position),
+            params.context?.autoImport !== false, params.context?.autoImport === 'only' ? undefined : 'self');
         const completionSource = workspace.sourceText(completionHandle);
         const beforeCursor = completionSource.split('\n')[position.line].slice(0, position.character);
         const fromImport = JSON.parse(clientImportFacts(completionSource)).fromImports.findLast(imported =>
@@ -2255,6 +2238,7 @@ function request(method, params) {
         const absoluteImport = beforeCursor.match(/^\s*(?:from\s+|import\s+(?:[\w.]+(?:\s+as\s+\w+)?\s*,\s*)*)(?!\.)([\w.]*)$/);
         const modulePrefix = fromImport?.module ?? absoluteImport?.[1].split('.').slice(0, -1).join('.');
         const hideDeletion = native.some(item => item.name === 'delete_all_rows') && hiddenTableDeletion(completionHandle, position);
+        const hideSelfDeletion = native.some(item => item.name === 'self.delete_all_rows') && hiddenTableDeletion(completionHandle, position, 'self');
         const documentation = /\.[\p{ID_Continue}_]*$/u.test(beforeCursor)
             ? { uri: params.textDocument.uri, position: params.position, revision } : undefined;
         const mapNativeCompletion = item => {
@@ -2264,7 +2248,7 @@ function request(method, params) {
                     module = modulePrefix ? `${modulePrefix}.${item.name}` : item.name;
                 if (!isServer && sourceEnvironments.size && module && !skulptModuleSupported(module)) return [];
                 if (generatedBindings.has(JSON.stringify([item.name, item.detail])) || constructor && item.name === 'form=' ||
-                    hideDeletion && item.name === 'delete_all_rows') return [];
+                    hideDeletion && item.name === 'delete_all_rows' || hideSelfDeletion && item.name === 'self.delete_all_rows') return [];
                 if (item.name.endsWith('=') && !isPythonIdentifier(item.name.slice(0, -1))) return [];
                 const additionalTextEdits = item.additional_text_edits?.map(edit => {
                     try { return { range: mappedRange(path, range(edit.range)), newText: edit.new_text }; }
@@ -2279,13 +2263,11 @@ function request(method, params) {
                     labelDetails: module && additionalTextEdits?.length ? { description: module } : undefined,
                     detail: item.detail, documentation: item.documentation, insertText: item.insert_text, additionalTextEdits,
                     data: { ...(documentation ? { documentation } : {}),
+                        implicitSelf: item.name.startsWith('self.') && !additionalTextEdits?.length,
                         scopeDepth: item.scope_depth, inheritanceDepth: item.inheritance_depth } }];
             } finally { item.free(); }
         };
         const items = native.flatMap(mapNativeCompletion);
-        const self = items.find(item => item.label === 'self' && !item.additionalTextEdits?.length);
-        if (self && params.context?.autoImport !== 'only') items.push(...selfMemberCompletions(completionHandle, position, prefix, mapNativeCompletion).map(item =>
-            ({ ...item, data: { ...item.data, scopeDepth: self.data.scopeDepth } })));
         completionHandle = fileHandle(params.textDocument.uri);
         if (items.some(item => [2, 3, 4, 7].includes(item.kind)) && callableArgument(completionHandle, position, calls.arguments))
             for (const item of items)
@@ -2295,7 +2277,8 @@ function request(method, params) {
                 ({ ...item, sortText: String(index).padStart(8, '0') })) };
         // Promote matching names already in scope. Keep Ty's order for keywords,
         // auto-imports and fuzzy matches rather than burying useful keywords.
-        const inScope = item => item.kind !== 14 && !item.additionalTextEdits?.length && item.label.startsWith(prefix);
+        const inScope = item => item.kind !== 14 && !item.additionalTextEdits?.length &&
+            (item.label.startsWith(prefix) || item.data?.implicitSelf && item.label.slice('self.'.length).startsWith(prefix));
         // Resolve only receivers with a candidate covered by the shared legacy
         // preferences. Aliases work; similarly named app types retain Ty's order.
         let preference;

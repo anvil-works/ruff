@@ -10,6 +10,17 @@ Generic WASM API extensions expose existing engine behaviour:
     a callback reference without `()`, including for ordinary Python APIs.
 - `Workspace.completions` accepts an optional `auto_import` boolean. It selects
     the existing completion setting; omitting it retains upstream auto-imports.
+- An optional fourth `receiver` argument adds qualified members of a visible
+    binding to ordinary bare-name completions. For example, `receiver="self"` matches
+    `self.name_box` for `name`, `name_box`, `sel` or an empty prefix. The query uses
+    the binding's inferred type and enclosing scope, including an indented blank
+    line inside a function. Strings, imports and explicit attribute expressions
+    retain their ordinary completion path. It reads existing source without
+    temporarily inserting `self.`, which would invalidate incremental analysis.
+    Expansion runs inside the existing scoped completion collection. A symbol-table
+    lookup finds the binding before inferring its type; other names need no extra
+    inference. The adapter decides when to request it; omitting the argument keeps
+    ordinary upstream completion and inference unchanged.
 - Completion items expose optional `scope_depth` and `inheritance_depth` numbers.
     These identify the declaration's distance in the already visited enclosing
     scopes or class MRO. Native inference, member deduplication and ranking stay

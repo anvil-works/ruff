@@ -18,6 +18,7 @@ use rustc_hash::FxHashSet;
 use ty_module_resolver::{
     ImportingFile, KnownModule, Module, ModuleName, resolve_real_shadowable_module,
 };
+use ty_python_core::scope::NodeWithScopeRef;
 use ty_python_core::{ProgramFile, semantic_index};
 use ty_python_semantic::HasType;
 use ty_python_semantic::importer::{ImportRequest, Importer};
@@ -39,6 +40,18 @@ pub fn completion<'db>(
     capabilities: CompletionCapabilities,
     file: ProgramFile<'db>,
     offset: TextSize,
+) -> Vec<Completion<'db>> {
+    completion_with_receiver(db, settings, capabilities, file, offset, None)
+}
+
+/// Adds qualified members of a visible binding to ordinary name completions.
+pub fn completion_with_receiver<'db>(
+    db: &'db dyn Db,
+    settings: &CompletionSettings,
+    capabilities: CompletionCapabilities,
+    file: ProgramFile<'db>,
+    offset: TextSize,
+    receiver: Option<&str>,
 ) -> Vec<Completion<'db>> {
     let program_file = file;
     let parsed = parsed_module(db, file.python_file(db)).load(db);
@@ -108,6 +121,24 @@ pub fn completion<'db>(
                         CompletionBuilder::from_semantic_completion(db, &env, semantic_completion)
                             .module_dependency_kind(module_dependency_kind),
                     );
+                }
+                if let Some(receiver) = receiver
+                    && let Some(scope) = context
+                        .cursor
+                        .indented_scope()
+                        .and_then(|scope| semantic_index(db, program_file).try_node_scope(scope))
+                        .or_else(|| model.scope(scoped.node))
+                {
+                    for member in model.scoped_member_completions(scope, receiver, |name| {
+                        completions
+                            .query
+                            .is_match(&compact_str::format_compact!("{receiver}.{name}"))
+                    }) {
+                        let mut builder =
+                            CompletionBuilder::from_semantic_completion(db, &env, member);
+                        builder.name = compact_str::format_compact!("{receiver}.{}", builder.name);
+                        completions.add(builder);
+                    }
                 }
                 add_keyword_completions(db, &env, &mut completions);
                 add_argument_completions(
@@ -948,6 +979,39 @@ impl RangeEndPosition {
 }
 
 impl<'m> ContextCursor<'m> {
+    /// A trailing blank line can lie beyond its suite's AST range. Recover its
+    /// function/class body scope only while the indentation remains inside it.
+    fn indented_scope(&self) -> Option<NodeWithScopeRef<'m>> {
+        if self.typed.is_some() || self.covering_node.node().as_expr_ref().is_some() {
+            return None;
+        }
+        let before = &self.source[..usize::from(self.offset)];
+        let indentation = before.rsplit('\n').next()?;
+        if indentation.is_empty() || !indentation.bytes().all(|byte| matches!(byte, b' ' | b'\t')) {
+            return None;
+        }
+        let previous = self.tokens_before.iter().rev().find(|token| {
+            !token.kind().is_trivia()
+                && !matches!(
+                    token.kind(),
+                    TokenKind::Newline | TokenKind::Indent | TokenKind::Dedent
+                )
+        })?;
+        for node in self.covering_node(previous.range()).ancestors() {
+            let scope = match node {
+                AnyNodeRef::StmtFunctionDef(function) => NodeWithScopeRef::Function(function),
+                AnyNodeRef::StmtClassDef(class) => NodeWithScopeRef::Class(class),
+                _ => continue,
+            };
+            let header = &self.source[..usize::from(node.start())];
+            let header_indent = header.rsplit('\n').next()?;
+            if indentation.starts_with(header_indent) && indentation.len() > header_indent.len() {
+                return Some(scope);
+            }
+        }
+        None
+    }
+
     /// Returns information about the context of the cursor.
     fn new(
         parsed: &'m ParsedModuleRef,

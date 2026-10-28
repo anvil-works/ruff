@@ -537,12 +537,15 @@ impl Workspace {
         }))
     }
 
+    /// Completes names, optionally including qualified members of a visible binding.
+    /// `receiver` only applies in bare-name expression contexts and never edits source.
     #[wasm_bindgen]
     pub fn completions(
         &self,
         file_id: &FileHandle,
         position: Position,
         auto_import: Option<bool>,
+        receiver: Option<String>,
     ) -> Result<Vec<Completion>, Error> {
         let source = source_text(&self.db, file_id.file);
         let index = line_index(&self.db, file_id.file);
@@ -555,12 +558,13 @@ impl Workspace {
         };
         let program_file = self.db.program_file(file_id.file);
         let env = ProgramEnvironment::from_file(program_file);
-        let completions = ty_ide::completion(
+        let completions = ty_ide::completion_with_receiver(
             &self.db,
             &settings,
             CompletionCapabilities::default(),
             program_file,
             offset,
+            receiver.as_deref(),
         );
 
         Ok(completions

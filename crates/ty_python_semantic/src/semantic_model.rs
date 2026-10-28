@@ -19,8 +19,8 @@ use crate::Db;
 use crate::place::definitions::DefinitionResolution;
 use crate::place::implicit_globals::all_implicit_module_globals;
 use crate::place::{
-    builtins_module_scope, class_body_implicit_symbol, implicit_builtins_symbol_scope,
-    loop_header_reachability, place_from_bindings,
+    ConsideredDefinitions, builtins_module_scope, class_body_implicit_symbol,
+    implicit_builtins_symbol_scope, loop_header_reachability, place_from_bindings, symbol,
 };
 use crate::place_load::{
     ImplicitPlaceLoad, PlaceLoadMode, PlaceLoadResolutionStep, PlaceLoadSourceKind,
@@ -323,6 +323,57 @@ impl<'db> SemanticModel<'db> {
             .into_iter()
             .map(|member| Completion {
                 scope_depth: None,
+                inheritance_depth: member.inheritance_depth,
+                name: CompactString::new(member.name),
+                ty: Some(member.ty),
+                builtin: false,
+                is_type_check_only: member.is_type_check_only,
+            })
+            .collect()
+    }
+
+    /// Returns matching members of a named binding visible in `scope`.
+    pub fn scoped_member_completions(
+        &self,
+        scope: FileScopeId,
+        receiver: &str,
+        name_filter: impl Fn(&str) -> bool,
+    ) -> Vec<Completion<'db>> {
+        let index = semantic_index(self.db, self.program_file());
+        let Some((binding_scope, scope_depth)) = index
+            .visible_ancestor_scopes(scope)
+            .enumerate()
+            .find_map(|(depth, (scope, _))| {
+                index
+                    .place_table(scope)
+                    .symbol_by_name(receiver)
+                    .filter(|symbol| symbol.is_local() || symbol.is_global())
+                    .map(|symbol| {
+                        let binding_scope = if symbol.is_global() {
+                            FileScopeId::global()
+                        } else {
+                            scope
+                        };
+                        (binding_scope, u32::try_from(depth).ok())
+                    })
+            })
+        else {
+            return vec![];
+        };
+        let Some(ty) = symbol(
+            self.db,
+            binding_scope.to_scope_id(self.db, self.program_file()),
+            receiver,
+            ConsideredDefinitions::AllReachable,
+        )
+        .place
+        .ignore_possibly_undefined() else {
+            return vec![];
+        };
+        all_members_filtered(self.db, &self.program_environment(), ty, name_filter)
+            .into_iter()
+            .map(|member| Completion {
+                scope_depth,
                 inheritance_depth: member.inheritance_depth,
                 name: CompactString::new(member.name),
                 ty: Some(member.ty),

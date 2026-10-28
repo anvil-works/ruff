@@ -111,6 +111,56 @@ test('Generated Form event methods suggest custom and lifecycle events after tem
     assert(['show', 'hide', 'refreshing_data_bindings', 'slot_event'].every(name => result.layout.includes(name)), JSON.stringify(result.layout));
 }));
 
+test('implicit self members match their own name prefixes without hiding local bindings', () => withBrowser(async page => {
+    const result = await page.evaluate(async () => {
+        const { BrowserAnalysisSession } = await import('/session.mjs');
+        const uri = 'file:///app/client_code/Home/__init__.py';
+        const header = 'from ._anvil_designer import HomeTemplate\nfrom typing import Literal\ndef choose(value: Literal["self.name_box"]): pass\nclass Home(HomeTemplate):\n    def probe(self):\n        name_local = "local"\n';
+        const session = new BrowserAnalysisSession({ workerUrl: '/worker.mjs', rootUri: 'file:///app', files: {
+            '/app/anvil.yaml': 'package_name: Main\n',
+            '/app/client_code/Home/form_template.yaml': JSON.stringify({ class_name: 'Home',
+                container: { type: 'ColumnPanel' }, components: [{ name: 'name_box', type: 'TextBox', properties: {} }] }),
+            '/app/client_code/Home/__init__.py': header,
+        } });
+        try {
+            const complete = async (suffix, offset = suffix.length) => {
+                const source = header + suffix;
+                await session.openDocument(uri, source);
+                const lines = (header + suffix.slice(0, offset)).split('\n');
+                return (await session.query('textDocument/completion', { textDocument: { uri },
+                    position: { line: lines.length - 1, character: lines.at(-1).length },
+                    context: { autoImport: false } })).result.items;
+            };
+            const matching = {};
+            for (const prefix of ['name', 'name_box', 'sel', '']) matching[prefix] = await complete('        ' + prefix);
+            return { matching, explicit: await complete('        self.name'), outside: await complete('__cl'),
+                dedented: await complete('    '), nested: await complete('        def nested():\n            '),
+                module: await complete('self = "text"\nupp'),
+                shadowed: await complete('        def nested():\n            if False: self = None\n            name'),
+                globalMissing: await complete('        def nested():\n            global self\n            name'),
+                global: await complete('self = "text"\nclass Other:\n    def probe(self):\n        def nested():\n            global self\n            upp'),
+                string: await complete('        choose("name")', '        choose("name'.length) };
+        } finally { session.dispose(); }
+    });
+    for (const [prefix, items] of Object.entries(result.matching))
+        assert(items.some(item => item.label === 'self.name_box'), JSON.stringify({ prefix, labels: items.map(item => item.label) }));
+    const names = result.matching.name.map(item => item.label);
+    assert(names.includes('name_local'), JSON.stringify(names));
+    assert(names.indexOf('name_local') < names.indexOf('self.name_box'), JSON.stringify(names));
+    const completion = result.matching.name.find(item => item.label === 'self.name_box');
+    assert.equal(completion.insertText ?? completion.label, 'self.name_box');
+    assert(result.explicit.some(item => item.label === 'name_box'));
+    assert(!result.explicit.some(item => item.label.startsWith('self.')));
+    assert(!result.outside.some(item => item.label.startsWith('self.')));
+    assert(!result.dedented.some(item => item.label.startsWith('self.')));
+    assert(result.nested.some(item => item.label === 'self.name_box'));
+    assert(result.module.some(item => item.label === 'self.upper'));
+    assert(!result.shadowed.some(item => item.label === 'self.name_box'));
+    assert(!result.globalMissing.some(item => item.label.startsWith('self.')));
+    assert(result.global.some(item => item.label === 'self.upper'));
+    assert(!result.string.some(item => item.label.includes('self.self.')));
+}));
+
 test('Callable parameters preserve function references for ordinary Python APIs', () => withBrowser(async page => {
     const item = await page.evaluate(async () => {
         const { BrowserAnalysisSession } = await import('/session.mjs');
