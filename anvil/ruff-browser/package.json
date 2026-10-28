@@ -1,0 +1,19 @@
+{
+  "name": "@anvil-works/ruff-wasm-web",
+  "version": "0.17.1-anvil.0",
+  "description": "Size-focused WebAssembly build of upstream Ruff",
+  "type": "module",
+  "main": "ruff_wasm.js",
+  "types": "ruff_wasm.d.ts",
+  "sideEffects": ["./snippets/*"],
+  "files": ["ruff_wasm.js", "ruff_wasm_bg.wasm", "ruff_wasm.d.ts", "build.json", "LICENSE"],
+  "scripts": {
+    "build": "node build.mjs",
+    "test": "node --test test.mjs",
+    "prepack": "node build.mjs --verify"
+  },
+  "repository": {"type": "git", "url": "https://github.com/anvil-works/ruff.git", "directory": "anvil/ruff-browser"},
+  "license": "MIT",
+  "publishConfig": {"access": "public"},
+  "packageManager": "pnpm@11.9.0"
+}

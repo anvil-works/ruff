@@ -34,6 +34,14 @@ compatibility logic and remove each local difference when an equivalent upstream
 API becomes available.
 Review engine differences with `git diff main -- crates`.
 
+## Browser build capabilities
+
+`ty_wasm` makes its existing formatter dependency and `Workspace.format` export
+optional through a default-enabled `format` Cargo feature. Normal builds keep
+the formatting API. Anvil's browser release disables it because the IDE uses
+Ruff for formatting; its type inference and other language services are unchanged.
+Remove this local build extension when upstream provides the same option.
+
 ## Completion work
 
 Scoped completion applies its existing name matcher before resolving module

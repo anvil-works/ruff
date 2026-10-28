@@ -21,6 +21,11 @@ that build; rerun the build after source changes. `pnpm build:comlink` and
 `pnpm build:stubs` refresh those assets during development; `pnpm build:wasm` is
 the faster development-only engine build. Run the full release build before packing.
 
+The release browser engine uses size-focused optimisation (`z`, one codegen
+unit) and excludes Ty's optional formatter. Ruff provides IDE formatting.
+Normal upstream Ty builds retain their default formatting API. The build
+manifest records these engine settings separately from the release profile.
+
 The published package contains the session, worker and complete `dist/` assets,
 including both WASM binaries and licence notices. Consumers need no Rust, Python
 or install scripts. Serve the package contents with JavaScript and WebAssembly

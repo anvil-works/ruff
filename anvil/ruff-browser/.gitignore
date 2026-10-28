@@ -1,0 +1,7 @@
+/.cache/
+/node_modules/
+/ruff_wasm.js
+/ruff_wasm.d.ts
+/ruff_wasm_bg.wasm
+/build.json
+/LICENSE

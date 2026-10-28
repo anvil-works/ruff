@@ -14,6 +14,7 @@ use ruff_db::system::{
 use ruff_db::vendored::VendoredPath;
 use ruff_diagnostics::{Applicability, Edit};
 use ruff_notebook::Notebook;
+#[cfg(feature = "format")]
 use ruff_python_formatter::formatted_file;
 use ruff_ranged_value::ValueSource;
 use ruff_source_file::{LineIndex, OneIndexed, SourceLocation};
@@ -295,6 +296,7 @@ impl Workspace {
         Ok(format!("{:#?}", parsed.syntax()))
     }
 
+    #[cfg(feature = "format")]
     pub fn format(&self, file_id: &FileHandle) -> Result<Option<String>, Error> {
         formatted_file(&self.db, file_id.file).map_err(into_error)
     }

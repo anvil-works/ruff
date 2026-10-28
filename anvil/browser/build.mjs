@@ -9,6 +9,7 @@ const root = new URL('./', import.meta.url);
 const manifestUrl = new URL('dist/BUILD.json', root);
 const packageJson = JSON.parse(await readFile(new URL('package.json', root), 'utf8'));
 const publicFiles = ['session.mjs', 'contexts.mjs', 'forms.mjs', 'source-projection.mjs', 'renames.mjs', 'worker.mjs'];
+const engineBuild = { optLevel: 'z', codegenUnits: 1, defaultFeatures: false, features: ['console_error_panic_hook'] };
 const hash = source => createHash('sha256').update(source).digest('hex');
 const git = args => execFileSync('git', args, { cwd: fileURLToPath(root), encoding: 'utf8' }).trim();
 const buildInputs = ['.', '../compat', '../api-stubs', '../../crates', '../../Cargo.toml', '../../Cargo.lock',
@@ -22,24 +23,30 @@ const inputFingerprint = async () => {
     digest.update(await readFile(new URL(import.meta.resolve('@anvil-works/python-stubs/manifest.json'))));
     return digest.digest('hex');
 };
-const command = (file, args) => execFileSync(file, args, {
+const command = (file, args, { env = {} } = {}) => execFileSync(file, args, {
     cwd: fileURLToPath(root), stdio: 'inherit',
-    env: { ...process.env, CARGO_BUILD_JOBS: process.env.CARGO_BUILD_JOBS ?? '2' },
+    env: { ...process.env, CARGO_BUILD_JOBS: process.env.CARGO_BUILD_JOBS ?? '2', ...env },
 });
 
 if (process.argv.includes('--verify')) {
     const manifest = JSON.parse(await readFile(manifestUrl, 'utf8'));
     assert.equal(manifest.version, packageJson.version, 'Build the browser assets for this package version');
     assert.equal(manifest.profile, 'release');
+    assert.deepEqual(manifest.engineBuild, engineBuild, 'Engine build settings changed; rebuild before packing');
     assert.equal(manifest.inputsSha256, await inputFingerprint(), 'Browser build inputs changed; run pnpm build before packing');
     for (const [file, expected] of Object.entries(manifest.files)) {
         assert.equal(hash(await readFile(new URL(file, root))), expected, `Browser asset changed after its release build: ${file}`);
     }
 } else {
+    const fingerprint = await inputFingerprint();
     command(process.execPath, ['build-comlink.mjs']);
     command(process.execPath, ['build-stub-packs.mjs']);
     command('wasm-pack', ['build', '../../crates/ty_wasm', '--release', '--target', 'web',
-        '--out-dir', '../../anvil/browser/dist/wasm', '--', '--locked']);
+        '--out-dir', '../../anvil/browser/dist/wasm', '--', '--locked', '--no-default-features',
+        '--features', engineBuild.features.join(',')], {
+        env: { CARGO_PROFILE_RELEASE_OPT_LEVEL: engineBuild.optLevel,
+            CARGO_PROFILE_RELEASE_CODEGEN_UNITS: String(engineBuild.codegenUnits) },
+    });
     command('wasm-pack', ['build', '../compat', '--release', '--target', 'web',
         '--out-dir', '../browser/dist/compat', '--', '--features', 'browser', '--locked']);
     // wasm-pack's nested ignore files otherwise exclude the binaries from npm.
@@ -52,12 +59,14 @@ if (process.argv.includes('--verify')) {
     for (const file of [...publicFiles, ...assets].sort()) files[file] = hash(await readFile(new URL(file, root)));
     const stubs = JSON.parse(await readFile(new URL('../api-stubs/SOURCE.json', root), 'utf8'));
     const serverManifest = await readFile(new URL(import.meta.resolve('@anvil-works/python-stubs/manifest.json')));
+    assert.equal(await inputFingerprint(), fingerprint, 'Browser inputs changed during compilation; rebuild before packing');
     await writeFile(manifestUrl, JSON.stringify({
         version: packageJson.version,
         profile: 'release',
+        engineBuild,
         sourceRevision: git(['rev-parse', 'HEAD']),
         sourceDirty: !!git(['status', '--porcelain', '--', ...buildInputs]),
-        inputsSha256: await inputFingerprint(),
+        inputsSha256: fingerprint,
         apiStubsRevision: stubs.revision,
         serverStubsSha256: hash(serverManifest),
         files,

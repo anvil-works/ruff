@@ -14,7 +14,7 @@ finished after the checker exists on npm.
 
 The browser package has its own version in `anvil/browser/package.json`. A
 browser-only release does not require new native checker or Python-stub packages.
-The next browser candidate is `0.1.0-canary.3`; its typing packs remain
+The next browser candidate is `0.1.0-canary.4`; its typing packs remain
 `@anvil-works/python-stubs@0.1.0-canary.1`. The published native checker stays at
 `0.1.0-canary.1`. Recheck npm before publication: an existing version cannot be
 replaced.
@@ -43,6 +43,15 @@ Chrome and uploads an npm archive. It has no npm credentials and never publishes
 The IDE copies the installed package, including lazy packs and licence notices,
 under a versioned URL. Its Docker build needs neither Rust nor a sibling checkout.
 The native validation workflow remains separate.
+
+## Independent Ruff browser package
+
+`anvil/ruff-browser` builds `@anvil-works/ruff-wasm-web` from the pinned,
+unmodified upstream release with size-focused optimisation. It has its own
+upstream-based package version and does not require a Ty or native-checker release.
+Run `pnpm build`, `pnpm test` and `pnpm pack` there; inspect `build.json` and test
+the packed package before Stu publishes it. Its build verifies the upstream
+archive checksum; prepack verifies the package inputs and generated output hashes.
 
 ## Native release snapshot — 20 October 2026
 

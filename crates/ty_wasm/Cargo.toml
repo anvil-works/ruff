@@ -24,17 +24,14 @@ test = false
 
 [dependencies]
 ty_ide = { workspace = true }
-ty_project = { workspace = true, default-features = false, features = [
-    "deflate",
-    "format",
-] }
+ty_project = { workspace = true, default-features = false, features = ["deflate"] }
 ty_python_core = { workspace = true }
 ty_python_semantic = { workspace = true }
 
 ruff_db = { workspace = true, default-features = false, features = [] }
 ruff_diagnostics = { workspace = true }
 ruff_notebook = { workspace = true }
-ruff_python_formatter = { workspace = true }
+ruff_python_formatter = { workspace = true, optional = true }
 ruff_ranged_value = { workspace = true }
 ruff_source_file = { workspace = true }
 ruff_text_size = { workspace = true }
@@ -51,7 +48,8 @@ wasm-bindgen = { workspace = true }
 wasm-bindgen-test = { workspace = true }
 
 [features]
-default = ["console_error_panic_hook"]
+default = ["console_error_panic_hook", "format"]
+format = ["dep:ruff_python_formatter", "ty_project/format"]
 
 [lints]
 workspace = true
