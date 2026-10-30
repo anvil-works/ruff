@@ -123,6 +123,8 @@ class Packaging(unittest.TestCase):
             "ANVIL_PYRIGHT_ROOT": str(self.app / "unavailable checkout"),
         }
         environment.pop("ANVIL_PYRIGHT", None)
+        environment.pop("ANVIL_API_STUBS_PATH", None)
+        environment.pop("ANVIL_AGENT_HOST", None)
 
         def validate(target, checker=executable):
             before = {

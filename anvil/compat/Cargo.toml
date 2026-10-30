@@ -30,6 +30,3 @@ wasm-bindgen = { version = "0.2.123", optional = true }
 
 [features]
 browser = ["dep:wasm-bindgen", "dep:js-sys", "dep:pep440_rs", "dep:toml"]
-
-[build-dependencies]
-walkdir = "2"

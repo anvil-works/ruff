@@ -1,6 +1,6 @@
 {
   "repository": "https://github.com/anvil-works/anvil",
-  "revision": "d4aa8cfabec313e0639b4cff8985ef6acb364bcc",
+  "revision": "e9d4d163547240ed7f827b8ce6d18b64c6cf4831",
   "files": {
     "anvil/__init__.pyi": "a60b129c3e3389cd69af1d307e8dc83e0fd34a968ee0e0bd575fa00e685d64e6",
     "anvil/designer.pyi": "6f1bf4ae07452b7b0d3a92f6ab19b2aa6d0ced7b6c27afdc8a30520a8cf54d52",
@@ -41,10 +41,18 @@
   },
   "inputs": {
     "doc/dist/index.json": "f764473774572c86d0aba78ec0f814c1705272529b336e16103da27d741a12df",
-    "doc/anvil-api-stubs/generate-stubs.mjs": "95ed57b64e217e6332e2a7dd644d6653e54edad7bede981bae3f27ca4edfa708",
+    "doc/anvil-api-stubs/generate-stubs.mjs": "03626ce2e20d75f2a426a10539d49bb2b254cfbbf2de3739d07a3907fff226f2",
     "doc/anvil-api-stubs/stub_documentation.py": "de67507573bceda189a49724be31e054f2a360fe37496f966af5d2670c353498",
     "doc/anvil-api-stubs/plotly-stubs.mjs": "47aa0a7ec6831e6a35649e8b1074a7f4e0a0ec3107b4a75187ec94a596129b32",
     "doc/anvil-api-stubs/source/completion-preferences.json": "8ae5865143a326dcaaeefb145b16e8e885c28031917619f6add0d456ebbf47cd",
+    "doc/anvil-api-stubs/client-runtime.mjs": "b93a834b7aa8cca74271b939c686165417043626e0f93ea56a9e19bbb0f22895",
+    "doc/anvil-api-stubs/python-stdlib.json": "dc4ee5e39e2fd4ed644983397b81505895a2742982b28b918ba575ffdf6e0e04",
+    "runtime/client/js/runner/load-modules.ts": "ad9dcf5f05be42c35d720abf35d796d9d810b986b9de85e13ac0cc7a54e89203",
+    "runtime/client/js/lib/skulpt-stdlib-1.json": "0d658a7f5e516db2efaf359d4d5ef68817dcc4935556779e56233ebeaaf6d620",
+    "runtime/client/js/lib/skulpt-stdlib-2.json": "fcd8b4cfddc1bb63f4cc5c0019de01800608058509ef5bedb871dd30ae072b01",
+    "runtime/client/js/lib/skulpt-stdlib-3.json": "b570ed267664066ab63ed64edc58b8ceeb6b95eaf214f78380312c6a3083b334",
+    "runtime/client/js/lib/skulpt-stdlib.js": "f44f0bd48c10ab64b2d90d738c34696018a416c98e8e28e3b598296fc8624c61",
+    "runtime/client/js/lib/skulpt-stdlib.json": "1ef56af765408e09740248425c33f3ee1b3390d0bdc460e16b1152809da3a361",
     "website/static/_/redirects.yaml": "d2e78311fff80d8d911902eee2588ce7b5134fb93c4365ad13d98a41de9272d8"
   }
 }

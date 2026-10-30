@@ -144,6 +144,10 @@ fn anvil_typeshed() -> Result<PathBuf> {
     {
         return Ok(PathBuf::from(path.trim()));
     }
+    bundled_typeshed()
+}
+
+fn bundled_typeshed() -> Result<PathBuf> {
     let executable = std::env::current_exe()?;
     let bundle = executable
         .parent()
@@ -167,6 +171,20 @@ fn validate(app: &Path, files: &[PathBuf]) -> Result<Vec<Value>> {
         "package_name must be a Python identifier"
     );
     let stubs = anvil_typeshed()?;
+    let mut runtime_path = stubs.join("client-runtime.json");
+    // Existing stub overrides predate runtime metadata; retain bundled defaults.
+    if !runtime_path.try_exists()? {
+        runtime_path = bundled_typeshed()?.join("client-runtime.json");
+    }
+    let client_runtime = anvil_ty_compat::skulpt::ClientRuntime::new(
+        &fs::read_to_string(&runtime_path).with_context(|| {
+            format!(
+                "reading client runtime metadata from {}",
+                runtime_path.display()
+            )
+        })?,
+    )
+    .map_err(anyhow::Error::msg)?;
     let api = fs::read_to_string(stubs.join("client/anvil/__init__.pyi"))
         .with_context(|| format!("reading Anvil API stubs from {}", stubs.display()))?;
     let client = sources(&app.join("client_code"))?;
@@ -467,6 +485,7 @@ fn validate(app: &Path, files: &[PathBuf]) -> Result<Vec<Value>> {
                 &server_roots,
                 package,
                 environment == "client",
+                &client_runtime,
             )?);
             suppressions::apply(
                 &db,

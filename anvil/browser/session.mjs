@@ -8,11 +8,11 @@ export class BrowserAnalysisSession {
     #queue;
     #shutdown = new AbortController();
 
-    constructor({ workerUrl, rootUri, files }) {
+    constructor({ workerUrl, rootUri, files, apiStubsUrl }) {
         this.#worker = new Worker(workerUrl, { type: 'module' });
         this.#remote = Comlink.wrap(this.#worker);
         this.#worker.onerror = (event) => this.#stop(new Error(event.message || 'ty worker failed'));
-        this.#queue = this.#send('initialize', { rootUri, files }).catch(error => this.#stop(error));
+        this.#queue = this.#send('initialize', { rootUri, files, apiStubsUrl }).catch(error => this.#stop(error));
     }
 
     async #send(method, params) {

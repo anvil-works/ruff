@@ -41,7 +41,7 @@ class ColumnNames(unittest.TestCase):
             "quoted: str = row['quote\"name']\n"
             "normal: str = row['name']\n"
             "changes = row.buffered_changes\n"
-            "if changes is not None:\n    buffered: str = changes['full name']\n"
+            "if changes is not None:\n    buffered: str | None = changes['full name']\n"
             "for person in app_tables.people.search(**{'full name': 'Ada'}):\n"
             "    title: str = person['class']\n"
             "found = app_tables.people.get(**{'full name': 'Ada'})\n"
@@ -94,3 +94,27 @@ class ColumnNames(unittest.TestCase):
                     all(issue["rule"] == "invalid-argument-type" for issue in issues),
                     events,
                 )
+
+    def test_none_clears_columns_without_changing_optimistic_read_types(self):
+        for column in ("name", "full name"):
+            config = self.app / "anvil.yaml"
+            schema = {"people": {"columns": [{"name": column, "type": "string"}]}}
+            config.write_text(
+                "package_name: TyProof\ndb_schema: " + json.dumps(schema) + "\n"
+            )
+            source = (
+                "from anvil.tables import app_tables\n"
+                f"row = app_tables.people.add_row(**{{{column!r}: None}})\n"
+                f"row.update(**{{{column!r}: None}})\n"
+                f"row[{column!r}] = None\n"
+                f"name: str = row[{column!r}]\n"
+                "changes = row.buffered_changes\n"
+                "if changes is not None:\n"
+                f"    cleared: str | None = changes[{column!r}]\n"
+            )
+            for environment in ("client", "server"):
+                with self.subTest(column=column, environment=environment):
+                    file = self.write(f"{environment}_code/People.py", source)
+                    result, events = self.validate(file)
+                    self.assertEqual(result.returncode, 0, (result.stdout, result.stderr))
+                    self.assertFalse(events[-1]["data"].get("issues"), events)

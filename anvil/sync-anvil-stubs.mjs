@@ -12,7 +12,9 @@ const anvil = process.argv[2] ? path.resolve(process.argv[2]) : path.resolve(dir
 const source = path.join(anvil, 'doc/anvil-api-stubs/source');
 const outputRoot = path.join(directory, 'api-stubs');
 const { generateStubs } = await import(pathToFileURL(path.join(anvil, 'doc/anvil-api-stubs/generate-stubs.mjs')));
-const result = await generateStubs({ outputRoot });
+// The browser package builds its separate JSON asset from these declarations.
+// Native packages need only the .pyi files and metadata, without a duplicate map.
+const result = await generateStubs({ outputRoot, browserOutputPath: null });
 const files = {};
 for (const entry of await readdir(source, { recursive: true, withFileTypes: true })) {
     if (!entry.isFile() || !entry.name.endsWith('.pyi')) continue;
@@ -21,9 +23,15 @@ for (const entry of await readdir(source, { recursive: true, withFileTypes: true
 }
 // The generated docs depend on the catalogue as well as the handwritten types.
 const inputs = {};
+const runtimeLibrary = 'runtime/client/js/lib';
+const runtimeFiles = (await readdir(path.join(anvil, runtimeLibrary)))
+    .filter(name => /^skulpt-stdlib(?:-\d+)?\.(?:js|json)$/.test(name))
+    .map(name => `${runtimeLibrary}/${name}`);
 for (const filename of ['doc/dist/index.json', 'doc/anvil-api-stubs/generate-stubs.mjs',
     'doc/anvil-api-stubs/stub_documentation.py', 'doc/anvil-api-stubs/plotly-stubs.mjs',
-    'doc/anvil-api-stubs/source/completion-preferences.json', 'website/static/_/redirects.yaml']) {
+    'doc/anvil-api-stubs/source/completion-preferences.json', 'doc/anvil-api-stubs/client-runtime.mjs',
+    'doc/anvil-api-stubs/python-stdlib.json',
+    'runtime/client/js/runner/load-modules.ts', ...runtimeFiles, 'website/static/_/redirects.yaml']) {
     inputs[filename] = createHash('sha256').update(await readFile(path.join(anvil, filename))).digest('hex');
 }
 await writeFile(path.join(outputRoot, 'SOURCE.json'), JSON.stringify({

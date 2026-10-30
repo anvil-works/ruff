@@ -686,6 +686,35 @@ test('table schema supplies row keys and value types and refreshes without Pytho
     assert(result.changed.result.items.some(item => item.label === 'real'));
 }));
 
+test('table writes accept None and still check column types in client and server', () => withBrowser(async page => {
+    const result = await page.evaluate(async () => {
+        const { BrowserAnalysisSession } = await import('/session.mjs');
+        const source = 'from anvil.tables import app_tables\n' +
+            'row = app_tables.people.add_row(name=None)\nrow.update(name=None)\n' +
+            'contact = app_tables.contacts.add_row(**{"full name": None})\ncontact.update(**{"full name": None})\n' +
+            'name: str = row["name"]\nrow.update(name=123)\n';
+        const session = new BrowserAnalysisSession({ workerUrl: '/worker.mjs', rootUri: 'file:///app', files: {
+            '/app/anvil.yaml': JSON.stringify({ package_name: 'Main', db_schema: {
+                people: { columns: [{ name: 'name', type: 'string' }] },
+                contacts: { columns: [{ name: 'full name', type: 'string' }] },
+            } }),
+            '/app/client_code/main.py': source,
+            '/app/server_code/main.py': source,
+        } });
+        try {
+            const results = [];
+            for (const environment of ['client', 'server']) {
+                const textDocument = { uri: `file:///app/${environment}_code/main.py` };
+                results.push((await session.query('textDocument/diagnostic', { textDocument })).result.items);
+            }
+            return results;
+        } finally { session.dispose(); }
+    });
+    for (const diagnostics of result) {
+        assert.deepEqual(diagnostics.map(item => [item.code, item.range.start.line]), [['invalid-argument-type', 6]]);
+    }
+}));
+
 test('Users rows and configured Drive files follow current service metadata', () => withBrowser(async page => {
     const result = await page.evaluate(async () => {
         const { BrowserAnalysisSession } = await import('/session.mjs');

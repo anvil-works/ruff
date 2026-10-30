@@ -9,8 +9,6 @@ use wasm_bindgen::prelude::*;
 use crate::forms::{RenderedForm, TemplateContext, class_name, parse_template, render};
 use crate::{Source, dependencies, js_components, models, tables};
 
-include!(concat!(env!("OUT_DIR"), "/api_stubs.rs"));
-
 /// IDE-resolved cache roots and logical dependency IDs mapped to those roots.
 /// The IDE server has already selected direct and transitive dependencies.
 #[derive(serde::Deserialize)]
@@ -61,8 +59,8 @@ struct FormContext {
 /// One worker owns this preparation cache alongside its ty workspace. Cache only
 /// pure Anvil declarations; ty remains responsible for incremental Python types.
 #[wasm_bindgen]
-#[derive(Default)]
 pub struct Preparation {
+    api_stubs: BTreeMap<String, String>,
     models: BTreeMap<PathBuf, CachedModels>,
     forms: BTreeMap<String, CachedForm>,
     form_context: Option<FormContext>,
@@ -71,8 +69,15 @@ pub struct Preparation {
 #[wasm_bindgen]
 impl Preparation {
     #[wasm_bindgen(constructor)]
-    pub fn new() -> Self {
-        Self::default()
+    pub fn new(api_stubs_json: &str) -> Result<Self, JsValue> {
+        let api_stubs = serde_json::from_str(api_stubs_json)
+            .map_err(|error| JsValue::from_str(&format!("Invalid Anvil API stubs: {error}")))?;
+        Ok(Self {
+            api_stubs,
+            models: BTreeMap::new(),
+            forms: BTreeMap::new(),
+            form_context: None,
+        })
     }
 
     pub fn prepare(
@@ -238,11 +243,6 @@ impl Preparation {
         }
         let environment = if is_server { "server" } else { "client" };
         let api_root = format!("{root}/.anvil/types/{environment}");
-        let api = API_STUBS
-            .iter()
-            .find(|(path, _)| *path == "client/anvil/__init__.pyi")
-            .map(|(_, text)| *text)
-            .context("bundled client Anvil API is missing")?;
         let analysis_root = format!("{root}/.anvil/analysis/{environment}");
         let context_root = format!(
             "{analysis_root}/{}",
@@ -340,7 +340,11 @@ impl Preparation {
             self.forms.clear();
             self.form_context = Some(context);
         }
-        for (path, text) in API_STUBS {
+        let api = self
+            .api_stubs
+            .get("client/anvil/__init__.pyi")
+            .context("client/anvil/__init__.pyi is missing from Anvil API stubs")?;
+        for (path, text) in &self.api_stubs {
             if let Some(path) = path.strip_prefix(&format!("{environment}/")) {
                 let text = match path {
                     "anvil/tables/__init__.pyi" => {
@@ -352,7 +356,7 @@ impl Preparation {
                     "anvil/google/drive.pyi" => crate::services::drive(&apps[0].1, text)?,
                     _ => None,
                 }
-                .unwrap_or_else(|| (*text).to_owned());
+                .unwrap_or_else(|| text.to_owned());
                 projected.insert(format!("{api_root}/{path}"), text);
             }
         }

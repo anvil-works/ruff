@@ -11,7 +11,7 @@ test('multiple server declaration versions select one compatible artifact and ca
     ];
     const fetched = [];
     await page.context().route('**/dist/stub-packs.mjs', route => route.fulfill({ contentType: 'text/javascript', body:
-        `export const completionPreferences = {}; export const stubPacks = ${JSON.stringify(profiles.map(profile => ({
+        `export const stubPacks = ${JSON.stringify(profiles.map(profile => ({
             id: 'demolib', server: true, modules: ['demolib'], version: profile.version,
             url: `./stubs/demo-${profile.version}.json`,
         })))}.map(pack => ({...pack, url: new URL(pack.url, import.meta.url)}));`,

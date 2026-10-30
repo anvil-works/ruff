@@ -3,8 +3,11 @@
 from __future__ import annotations
 
 import json
+import os
+import shutil
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 import test_validate as harness
 
@@ -14,6 +17,45 @@ class RuntimeDiagnostics(unittest.TestCase):
     setUp = harness.ValidateIntegration.setUp
     write = harness.ValidateIntegration.write
     validate = harness.ValidateIntegration.validate
+
+    def test_client_runtime_modules_follow_the_selected_stub_bundle(self):
+        stubs = self.app / "stub-overrides"
+        for environment in ("client", "server"):
+            shutil.copytree(
+                harness.ROOT / "anvil/api-stubs" / environment, stubs / environment
+            )
+        metadata = stubs / "client-runtime.json"
+        metadata.write_text(json.dumps({"modules": ["locale"]}))
+        client = self.write(
+            "client_code/Imports.py", "from locale import LC_TIME, setlocale\n"
+        )
+        server = self.write("server_code/Imports.py", "import os\n")
+        with patch.dict(os.environ, {"ANVIL_API_STUBS_PATH": str(stubs)}):
+            result, events = self.validate(client)
+            self.assertEqual(result.returncode, 0, (result.stdout, result.stderr))
+            client.write_text("import math\n")
+            result, events = self.validate(client)
+            self.assertEqual(result.returncode, 1, (result.stdout, result.stderr))
+            self.assertEqual(
+                events[-1]["data"]["issues"][0]["rule"],
+                "reportAnvilUnsupportedSkulptImport",
+            )
+            result, events = self.validate(server)
+            self.assertEqual(result.returncode, 0, (result.stdout, result.stderr))
+            # Older override directories still use the checker's bundled runtime data.
+            metadata.unlink()
+            result, events = self.validate(client)
+            self.assertEqual(result.returncode, 0, (result.stdout, result.stderr))
+
+    def test_malformed_client_runtime_metadata_does_not_use_bundled_defaults(self):
+        stubs = self.app / "stub-overrides"
+        stubs.mkdir()
+        (stubs / "client-runtime.json").write_text('{"modules": "locale"}')
+        client = self.write("client_code/Imports.py", "import math\n")
+        with patch.dict(os.environ, {"ANVIL_API_STUBS_PATH": str(stubs)}):
+            result, events = self.validate(client)
+        self.assertEqual(result.returncode, 1, (result.stdout, result.stderr))
+        self.assertIn("Invalid client runtime metadata", result.stdout)
 
     def test_client_syntax_policy_preserves_supported_fstrings(self):
         fixtures = json.loads(

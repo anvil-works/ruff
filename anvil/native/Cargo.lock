@@ -81,12 +81,11 @@ dependencies = [
  "serde",
  "serde_json",
  "serde_yaml",
- "walkdir",
 ]
 
 [[package]]
 name = "anvil-ty-native"
-version = "0.1.0-canary.1"
+version = "0.1.0-canary.2"
 dependencies = [
  "anvil-ty-compat",
  "anyhow",

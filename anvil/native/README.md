@@ -60,6 +60,13 @@ API stub changes alone do not require rebuilding Rust. Existing standalone
 bundles retain their packaged stubs, so create a fresh bundle when updating them.
 Do not hand-edit generated snapshots or copies inside a bundle.
 
+The stub directory also supplies `client-runtime.json`, whose `modules` array
+lists the Python standard-library modules available in Anvil's client runtime. Native validation reads it
+once per invocation. `ANVIL_API_STUBS_PATH` selects this data along with the types;
+older override directories without the file use the checker's bundled metadata.
+Malformed supplied metadata is an error. Runtime updates can therefore change
+client import availability without rebuilding the checker.
+
 ## npm packages and standalone bundle
 
 After building the release executable, run from the repository root with Python

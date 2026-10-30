@@ -31,8 +31,24 @@ for (const filename of licences) {
     await writeFile(new URL(filename, output), await readFile(new URL(`LICENSES/${filename}`, serverManifest)));
 }
 await writeFile(new URL('./dist/stub-packs.mjs', import.meta.url),
-    `export const stubPacks = ${JSON.stringify(packs)}.map(pack => ({...pack, url: new URL(pack.url, import.meta.url)}));\n` +
-    `export const completionPreferences = ${await readFile(new URL('../api-stubs/completion-preferences.json', import.meta.url), 'utf8')};\n`);
+    `export const stubPacks = ${JSON.stringify(packs)}.map(pack => ({...pack, url: new URL(pack.url, import.meta.url)}));\n`);
+// Standalone browser sessions have a separate default asset. The IDE supplies
+// its own generated asset and omits this default from its copied engine files.
+const apiRoot = new URL('../api-stubs/', import.meta.url);
+const apiFiles = {};
+for (const environment of ['client', 'server']) {
+    const paths = (await readdir(new URL(`${environment}/`, apiRoot), { recursive: true }))
+        .map(path => path.replaceAll('\\', '/')).filter(path => path.endsWith('.pyi')).sort();
+    for (const path of paths) {
+        if (environment === 'client' && path.startsWith('plotly/') && path !== 'plotly/__init__.pyi') continue;
+        apiFiles[`${environment}/${path}`] = await readFile(new URL(`${environment}/${path}`, apiRoot), 'utf8');
+    }
+}
+await writeFile(new URL('./dist/api-stubs.json', import.meta.url), JSON.stringify({
+    files: apiFiles,
+    completionPreferences: JSON.parse(await readFile(new URL('completion-preferences.json', apiRoot))),
+    clientRuntime: JSON.parse(await readFile(new URL('client-runtime.json', apiRoot))),
+}) + '\n');
 for (const previous of await readdir(output)) {
     if ((!packs.some(pack => pack.url === `./stubs/${previous}`) && /-[a-f0-9]{64}\.json$/.test(previous)) ||
         (previous.endsWith('.txt') && !licences.includes(previous))) {

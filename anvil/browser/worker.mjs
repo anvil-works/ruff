@@ -1,14 +1,17 @@
 import * as Comlink from './dist/comlink.mjs';
-import { stubPacks, completionPreferences } from './dist/stub-packs.mjs';
+import { stubPacks } from './dist/stub-packs.mjs';
 import { projectContext, contextPosition, contextCompletion, originalCompletion } from './contexts.mjs';
 import { visitForm, components, formPropertyTarget, handlerAnnotations } from './forms.mjs';
 import { projectAnnotations } from './source-projection.mjs';
 import { renameResource, renameComponent, componentAt, extendAnvilRename, rpcTarget, rpcTargets, rpcReferences, renameRpc, callableRegistrations } from './renames.mjs';
 import initialize, * as ty from './dist/wasm/ty_wasm.js';
-import initializeCompatibility, { Preparation, symbols, itemFacts, callFacts, literalOptions, renameNames, sourceImports, sourceUpdate, itemAssignments, dictionaryProbes, returnTypeDeclaration, rpcServerStub, rpcSignature, skulptModuleSupported, clientImportFacts, clientSyntaxDiagnostics, anvilDiagnostics, serverPackages, tyConfiguration, validRenameName as isPythonIdentifier } from './dist/compat/anvil_ty_compat.js';
+import initializeCompatibility, { Preparation, symbols, itemFacts, callFacts, literalOptions, renameNames, sourceImports, sourceUpdate, itemAssignments, dictionaryProbes, returnTypeDeclaration, rpcServerStub, rpcSignature, ClientRuntime, clientSyntaxDiagnostics, anvilDiagnostics, serverPackages, tyConfiguration, validRenameName as isPythonIdentifier } from './dist/compat/anvil_ty_compat.js';
 
 let workspace;
 let preparation;
+let clientRuntime;
+let completionPreferences;
+let preferredMembers;
 let root;
 let revision = 0;
 const files = new Map();
@@ -46,8 +49,6 @@ const handlerInputs = new Map();
 let declarationFiles = new Map();
 const loadedPacks = new Map();
 const serverPackageMetadata = JSON.stringify(stubPacks.filter(pack => pack.server));
-const preferredMembers = new Set(Object.values(completionPreferences).flatMap(preference =>
-    [preference.suggestedAttr, ...Object.keys(preference.priority ?? {})]).filter(Boolean));
 let packageRequirements;
 let serverTypePacks = [];
 const updateMethods = ['updateFiles', 'openDocument', 'closeDocument', 'setContext', 'closeContext'];
@@ -72,7 +73,19 @@ let queue = Promise.all([initialize(), initializeCompatibility()]);
 
 Comlink.expose({
     request(method, params) {
-        const pending = queue.then(async () => {
+        // Fetch declarations alongside WASM startup, only when a session starts.
+        const ready = method === 'initialize'
+            ? Promise.all([queue, fetch(params.apiStubsUrl ?? new URL('./dist/api-stubs.json', import.meta.url))]).then(async ([, response]) => {
+                if (!response.ok) throw new Error(`Unable to load Anvil API stubs: ${response.status} ${response.url}`);
+                const stubs = await response.json();
+                preparation = new Preparation(JSON.stringify(stubs.files));
+                clientRuntime = new ClientRuntime(JSON.stringify(stubs.clientRuntime));
+                completionPreferences = stubs.completionPreferences;
+                preferredMembers = new Set(Object.values(completionPreferences).flatMap(preference =>
+                    [preference.suggestedAttr, ...Object.keys(preference.priority ?? {})]).filter(Boolean));
+            })
+            : queue;
+        const pending = ready.then(async () => {
             await loadPacksForRequest(method, params);
             return { result: request(method, params), revision };
         });
@@ -1831,7 +1844,6 @@ function invalidateSources(before) {
 
 function request(method, params) {
     if (method === 'initialize') {
-        preparation = new Preparation();
         root = pathForUri(params.rootUri).replace(/\/$/, '');
         resetWorkspace();
         for (const [path, text] of Object.entries(params.files)) {
@@ -2099,7 +2111,7 @@ function request(method, params) {
                 if (selected && !syntaxLines.has(selected.start.line) && originalRange(path, selected)) items.push({ ...diagnostic, range: selected,
                     code: 'reportAnvilUnsupportedSkulptSyntax', source: 'anvil', severity: 2 });
             }
-            for (const imported of JSON.parse(clientImportFacts(workspace.sourceText(target))).imports) {
+            for (const imported of JSON.parse(clientRuntime.importFacts(workspace.sourceText(target))).imports) {
                 if (imported.resolve) {
                     // Definition follows re-exports (collections.abc points at an
                     // alias). Native import completion kinds distinguish modules
@@ -2230,7 +2242,7 @@ function request(method, params) {
             params.context?.autoImport !== false, params.context?.autoImport === 'only' ? undefined : 'self');
         const completionSource = workspace.sourceText(completionHandle);
         const beforeCursor = completionSource.split('\n')[position.line].slice(0, position.character);
-        const fromImport = JSON.parse(clientImportFacts(completionSource)).fromImports.findLast(imported =>
+        const fromImport = JSON.parse(clientRuntime.importFacts(completionSource)).fromImports.findLast(imported =>
             (imported.moduleEnd.line < position.line || imported.moduleEnd.line === position.line && imported.moduleEnd.character < position.character) &&
             (position.line < imported.range.end.line || position.line === imported.range.end.line &&
                 (position.character <= imported.range.end.character || !beforeCursor.slice(imported.range.end.character).trim())));
@@ -2246,7 +2258,7 @@ function request(method, params) {
                 let module = item.module_name;
                 if (!module && item.kind === ty.CompletionKind.Module && (fromImport || absoluteImport))
                     module = modulePrefix ? `${modulePrefix}.${item.name}` : item.name;
-                if (!isServer && sourceEnvironments.size && module && !skulptModuleSupported(module)) return [];
+                if (!isServer && sourceEnvironments.size && module && !clientRuntime.moduleSupported(module)) return [];
                 if (generatedBindings.has(JSON.stringify([item.name, item.detail])) || constructor && item.name === 'form=' ||
                     hideDeletion && item.name === 'delete_all_rows' || hideSelfDeletion && item.name === 'self.delete_all_rows') return [];
                 if (item.name.endsWith('=') && !isPythonIdentifier(item.name.slice(0, -1))) return [];

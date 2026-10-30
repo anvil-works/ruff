@@ -45,6 +45,7 @@ struct Imports<'db> {
     server_roots: &'db [PathBuf],
     package: &'db str,
     client: bool,
+    client_runtime: &'db anvil_ty_compat::skulpt::ClientRuntime,
     issues: Vec<Value>,
 }
 
@@ -67,7 +68,7 @@ impl Imports<'_> {
             ));
             return;
         }
-        if self.client && !anvil_ty_compat::skulpt::module_supported(name) {
+        if self.client && !self.client_runtime.module_supported(name) {
             self.issues.push(issue(
                 self.db, self.file, self.origin, range,
                 "reportAnvilUnsupportedSkulptImport", "error",
@@ -115,7 +116,7 @@ impl<'ast> Visitor<'ast> for Imports<'_> {
                     for alias in &import.names {
                         let child = format!("{module}.{}", alias.name);
                         if namespace
-                            || anvil_ty_compat::skulpt::module_supported(module.as_str())
+                            || self.client_runtime.module_supported(module.as_str())
                                 && self.model.resolve_module(Some(&child), 0).is_some()
                         {
                             self.check(&child, alias.name.range());
@@ -137,6 +138,7 @@ pub fn imports(
     server_roots: &[PathBuf],
     package: &str,
     client: bool,
+    client_runtime: &anvil_ty_compat::skulpt::ClientRuntime,
 ) -> Result<Vec<Value>> {
     let file = system_path_to_file(db, path)?;
     let parsed = parsed_module(db, db.program_file(file).python_file(db)).load(db);
@@ -149,6 +151,7 @@ pub fn imports(
         server_roots,
         package,
         client,
+        client_runtime,
         issues: Vec::new(),
     };
     for stmt in &parsed.syntax().body {

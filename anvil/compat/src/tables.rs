@@ -102,9 +102,11 @@ pub fn stub(
                 ))
             })
             .collect::<Result<Vec<_>>>()?;
+        // Clearing a column accepts None, while reads retain the column's type
+        // for completion, as in the original autocompleter.
         let fields = columns
             .iter()
-            .map(|(column, kind)| Ok(format!("{}: {kind}", serde_json::to_string(column)?)))
+            .map(|(column, kind)| Ok(format!("{}: {kind} | None", serde_json::to_string(column)?)))
             .collect::<Result<Vec<_>>>()?
             .join(", ");
         output.push_str(&format!("\n_BufferedChanges_{name} = TypedDict(\"_BufferedChanges_{name}\", {{{fields}}}, total=False)\n"));
@@ -133,7 +135,7 @@ pub fn stub(
             }
             output.push_str("    @overload\n    def __getitem__(self, key: str) -> Any: ...\n");
             for (column, kind) in &columns {
-                output.push_str(&format!("    @overload\n    def __setitem__(self, key: Literal[{}], value: {kind}) -> None: ...\n", serde_json::to_string(column)?));
+                output.push_str(&format!("    @overload\n    def __setitem__(self, key: Literal[{}], value: {kind} | None) -> None: ...\n", serde_json::to_string(column)?));
             }
             output.push_str(
                 "    @overload\n    def __setitem__(self, key: str, value: Any) -> None: ...\n",
@@ -141,7 +143,7 @@ pub fn stub(
             let args = if keyword_columns {
                 columns
                     .iter()
-                    .map(|(name, kind)| format!("{name}: {kind} = ..."))
+                    .map(|(name, kind)| format!("{name}: {kind} | None = ..."))
                     .collect::<Vec<_>>()
                     .join(", ")
             } else {
@@ -169,7 +171,7 @@ pub fn stub(
                 "*, {}",
                 columns
                     .iter()
-                    .map(|(name, kind)| format!("{name}: {kind} = ..."))
+                    .map(|(name, kind)| format!("{name}: {kind} | None = ..."))
                     .collect::<Vec<_>>()
                     .join(", ")
             )
