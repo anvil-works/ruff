@@ -14,19 +14,25 @@ finished after the checker exists on npm.
 
 The browser package has its own version in `anvil/browser/package.json`. A
 browser-only release does not require new native checker or Python-stub packages.
-The next browser candidate is `0.1.0-canary.4`; its typing packs remain
-`@anvil-works/python-stubs@0.1.0-canary.1`. The published native checker stays at
-`0.1.0-canary.1`. Recheck npm before publication: an existing version cannot be
-replaced.
+The next browser candidate is `0.1.0-canary.7`; it requires
+`@anvil-works/python-stubs@0.1.0-canary.2` for optional pytest typing. Publish and
+verify that typing package before resolving the browser lockfile. No native
+checker release is needed. Recheck npm before publication: an existing version
+cannot be replaced.
 
-1. Commit the reviewed browser source, including its new package version. From
-    that clean checkout, run `pnpm install --frozen-lockfile`, `pnpm build` and
+Publish from the main checkout on `anvil`. Land reviewed changes on that branch
+before preparing a release; do not publish from a feature branch or linked
+worktree. The release commit must also be on `origin/anvil` before npm publication.
+
+1. Land the reviewed browser source, including its new package version, on
+    `anvil`. From that clean main checkout, run `pnpm install --frozen-lockfile`, `pnpm build` and
     `pnpm test` in `anvil/browser`. Both WASM modules must use release mode.
 1. Inspect `dist/BUILD.json`: it must name the reviewed source revision, the new
     browser version and `sourceDirty: false`. Pack outside the source checkout
     with `pnpm pack --pack-destination "$(mktemp -d)"` and test that exact archive
     through the installed-package browser smoke before publishing it.
-1. Before npm publication, push the reviewed source and run Anvil's **Python
+1. Before npm publication, fast-forward push `anvil` and verify that `origin/anvil`
+    names the release's exact source commit. Run Anvil's **Python
     completion performance** workflow on the IDE feature branch, setting
     `ty_ref` to that full source SHA. This compares the candidate with the IDE's
     installed release on the same Linux runner. Require its compatibility and

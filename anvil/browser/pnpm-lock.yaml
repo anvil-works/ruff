@@ -8,8 +8,8 @@ importers:
   .:
     devDependencies:
       "@anvil-works/python-stubs":
-        specifier: 0.1.0-canary.1
-        version: 0.1.0-canary.1
+        specifier: 0.1.0-canary.2
+        version: 0.1.0-canary.2
       "@playwright/test":
         specifier: ^1.63.0
         version: 1.64.1
@@ -18,10 +18,10 @@ importers:
         version: 4.4.2
 
 packages:
-  "@anvil-works/python-stubs@0.1.0-canary.1":
+  "@anvil-works/python-stubs@0.1.0-canary.2":
     resolution:
       {
-        integrity: sha512-tdko1/Lln6JgQZu25oOldApZzq6iskmUrngQJldiz0LDNirz4in+nHANxxglhosxPM/1O/T0d2gN0tiD6xxgQA==,
+        integrity: sha512-WSljQSBnU2QmvoI9e/7fFbILENV4NF0grvtTlYRKrYPyzpAfmIzPlG2eoOT/dDoQQf9KCLcOajBehPnnxf9uYQ==,
       }
 
   "@playwright/test@1.64.1":
@@ -55,7 +55,7 @@ packages:
     hasBin: true
 
 snapshots:
-  "@anvil-works/python-stubs@0.1.0-canary.1": {}
+  "@anvil-works/python-stubs@0.1.0-canary.2": {}
 
   "@playwright/test@1.64.1":
     dependencies:

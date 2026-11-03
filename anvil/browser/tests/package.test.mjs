@@ -65,6 +65,27 @@ test('an installed browser package serves real completion and lazy library asset
         });
         assert(numpy.includes('reshape'));
         assert.equal(requests.filter(file => /\/stubs\/numpy-/.test(file)).length, 1);
+        assert(!requests.some(file => /\/stubs\/pytest-/.test(file)), 'Ordinary server analysis does not load test-only typing');
+        const pytest = await page.evaluate(async () => {
+            const uri = 'file:///server-tests/tests/server_tests/test_example.py';
+            const session = new (await import('/session.mjs')).BrowserAnalysisSession({
+                workerUrl: '/worker.mjs', rootUri: 'file:///server-tests', files: {
+                    '/server-tests/anvil.yaml': 'package_name: Main\n',
+                    '/server-tests/client_code/__init__.py': '',
+                    '/server-tests/server_code/__init__.py': '',
+                    '/server-tests/.anvil/server-tests.json': 'true',
+                    '/server-tests/tests/server_tests/__init__.py': '',
+                    '/server-tests/tests/server_tests/requirements.txt': 'pytest>=9\n',
+                    [new URL(uri).pathname]: 'import pytest\ndef test_patch(patch: pytest.MonkeyPatch):\n    patch.\n',
+                },
+            });
+            try {
+                return (await session.query('textDocument/completion', { textDocument: { uri },
+                    position: { line: 2, character: 10 } })).result.items.map(item => item.label);
+            } finally { session.dispose(); }
+        });
+        assert(pytest.includes('setenv'), 'Installed package includes usable pytest types');
+        assert.equal(requests.filter(file => /\/stubs\/pytest-/.test(file)).length, 1);
         assert((await readFile(path.join(installed, 'dist/comlink.LICENSE'))).length > 100);
         assert((await readdir(path.join(installed, 'dist/stubs'))).some(name => /numpy.*\.txt$/.test(name)));
     } finally {

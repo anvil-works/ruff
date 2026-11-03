@@ -1,6 +1,6 @@
 {
   "name": "@anvil-works/anvil-ty-browser",
-  "version": "0.1.0-canary.6",
+  "version": "0.1.0-canary.7",
   "type": "module",
   "scripts": {
     "build:comlink": "node build-comlink.mjs",
@@ -12,7 +12,7 @@
     "prepack": "node build.mjs --verify"
   },
   "devDependencies": {
-    "@anvil-works/python-stubs": "0.1.0-canary.1",
+    "@anvil-works/python-stubs": "0.1.0-canary.2",
     "@playwright/test": "^1.63.0",
     "comlink": "^4.4.2"
   },

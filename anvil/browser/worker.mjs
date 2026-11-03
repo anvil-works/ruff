@@ -110,7 +110,8 @@ function uriForPath(path, range) {
     // Model-base substitutions preserve source positions. Appended namespace
     // exports belong to the generated file, including required rename edits.
     path = !range || originalRange(path, range) ? origins.get(path) ?? path : path;
-    return path.startsWith('vendored:') ? path : new URL(path, 'file:///').href;
+    // Extra-file names can contain URL delimiters as well as Unicode.
+    return path.startsWith('vendored:') ? path : new URL(path.split('/').map(encodeURIComponent).join('/'), 'file:///').href;
 }
 
 function originalPath(path) {
@@ -251,6 +252,22 @@ function privateModule(name) {
     return name;
 }
 
+// pytest's default import mode adds each test's outermost package parent.
+// Keep existing __init__.py boundaries; tests are not part of the app package.
+function testImportRoots(current) {
+    const roots = new Set();
+    if (current.has(`${root}/tests/server_tests/__init__.py`)) roots.add(`${root}/tests`);
+    for (const path of current.keys()) {
+        if (!path.startsWith(`${root}/tests/server_tests/`) || !path.endsWith('.py')) continue;
+        const filename = path.slice(path.lastIndexOf('/') + 1);
+        if (filename !== 'conftest.py' && !/^test_.*\.py$/.test(filename) && !filename.endsWith('_test.py')) continue;
+        let directory = path.slice(0, path.lastIndexOf('/'));
+        while (current.has(`${directory}/__init__.py`)) directory = directory.slice(0, directory.lastIndexOf('/'));
+        roots.add(directory);
+    }
+    return [...roots];
+}
+
 function selectWorkspace(server) {
     if (server === isServer) return;
     runtimeWorkspaces.set(isServer, { workspace, handles, mounted, workspaceDirectories, preparedRootsJson, workspaceOptionsJson, resolvedImports });
@@ -302,10 +319,16 @@ function prepareApp(server = isServer, inferredItems = inferredFormItems) {
     projections = new Map([...origins].map(([canonical, original]) => [original, canonical]));
     const excluded = new Set(prepared.excludedSources ?? []);
     sourceEnvironments = new Map(Object.entries(prepared.sourceEnvironments ?? {}));
+    if (current.get(`${root}/.anvil/server-tests.json`) === 'true') {
+        for (const path of current.keys()) {
+            if (path.startsWith(`${root}/tests/server_tests/`) && path.endsWith('.py')) sourceEnvironments.set(path, true);
+        }
+    }
     const next = new Map([
         // Apply config explicitly so invalid TOML cannot leave native discovery
         // holding old rules. The original extra files remain available to readers.
-        ...[...current].filter(([path]) => !excluded.has(path) && path !== `${root}/ty.toml` && path !== `${root}/pyproject.toml`),
+        ...[...current].filter(([path]) => !excluded.has(path) && path !== `${root}/ty.toml` && path !== `${root}/pyproject.toml` &&
+            (server || !path.startsWith(`${root}/tests/server_tests/`))),
         ...preparedFiles,
     ]);
     if (formClasses.size) next.set(`${prepared.roots[0]}/${itemTypeModule}.pyi`, itemDeclarationSource(inferredItems?.declarations ?? []));
@@ -353,7 +376,8 @@ function prepareApp(server = isServer, inferredItems = inferredFormItems) {
         const lines = text.split(/\r\n|\r|\n/);
         return [[path, { line: lines.length - 1, character: lines.at(-1).length }]];
     }));
-    const roots = JSON.stringify(prepared.roots);
+    const searchRoots = [...prepared.roots, ...(server && current.get(`${root}/.anvil/server-tests.json`) === 'true' ? testImportRoots(current) : [])];
+    const roots = JSON.stringify(searchRoots);
     const directories = new Set();
     for (const path of next.keys()) {
         for (let directory = path.slice(0, path.lastIndexOf('/')); directory; directory = directory.slice(0, directory.lastIndexOf('/')))
@@ -371,7 +395,7 @@ function prepareApp(server = isServer, inferredItems = inferredFormItems) {
     mounted = next;
     workspaceDirectories = directories;
     const environment = JSON.parse(current.get(`${root}/.anvil/python-environment.json`) ?? '{}');
-    const options = { ...userOptions, environment: { 'python-version': server ? environment.server ?? '3.10' : '3.7', root: prepared.roots },
+    const options = { ...userOptions, environment: { 'python-version': server ? environment.server ?? '3.10' : '3.7', root: searchRoots },
         analysis: { 'return-type-inference': 'always', ...userOptions.analysis } };
     const optionsJson = JSON.stringify(options);
     if (optionsJson !== workspaceOptionsJson) {
@@ -393,6 +417,7 @@ function selectEnvironment(uri) {
 function environmentFor(uri) {
     if (uri.startsWith('vendored:')) return;
     const path = originalPath(pathForUri(uri));
+    if (files.get(`${root}/.anvil/server-tests.json`) === 'true' && path.startsWith(`${root}/tests/server_tests/`)) return true;
     let server = sourceEnvironments.get(path);
     for (const environment of ['client', 'server']) {
         if (path.startsWith(`${root}/.anvil/types/${environment}/`) || path.startsWith(`${root}/.anvil/analysis/${environment}/`))
@@ -406,7 +431,8 @@ function environmentFor(uri) {
 function availablePacks(server) {
     if (!server) return stubPacks.filter(pack => !pack.server);
     const requirements = [...JSON.parse(files.get(`${root}/.anvil/server-requirements.json`) ?? '[]'),
-        appConfigs[root]?.runtime_options?.server_spec?.requirements ?? ''].join('\n');
+        appConfigs[root]?.runtime_options?.server_spec?.requirements ?? '',
+        files.get(`${root}/.anvil/server-tests.json`) === 'true' ? files.get(`${root}/tests/server_tests/requirements.txt`) ?? '' : ''].join('\n');
     if (requirements !== packageRequirements) {
         const urls = JSON.parse(serverPackages(requirements, serverPackageMetadata));
         serverTypePacks = stubPacks.filter(pack => pack.server && urls.includes(String(pack.url)));
@@ -1771,7 +1797,9 @@ function updateSources(before) {
     const updates = [];
     for (const path of new Set([...before.keys(), ...current.keys()])) {
         if (before.get(path) === current.get(path)) continue;
-        if (!sourceEnvironments.has(path) || !before.has(path) || !current.has(path) || !path.endsWith('.py')) return false;
+        // This fast path patches projected app modules. Plain test files are
+        // mounted at their original paths and use the ordinary file update.
+        if (!projections.has(path) || !before.has(path) || !current.has(path) || !path.endsWith('.py')) return false;
         const rendered = sourceUpdate(JSON.stringify({ before: before.get(path), after: current.get(path),
             schema: appConfigs[root]?.db_schema ?? null, formClass: formClasses.get(path) ?? null }));
         if (!rendered) return false;
