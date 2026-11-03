@@ -14,7 +14,7 @@ finished after the checker exists on npm.
 
 The browser package has its own version in `anvil/browser/package.json`. A
 browser-only release does not require new native checker or Python-stub packages.
-The next browser candidate is `0.1.0-canary.7`; it requires
+The next browser candidate is `0.1.0-canary.8`; it requires
 `@anvil-works/python-stubs@0.1.0-canary.2` for optional pytest typing. Publish and
 verify that typing package before resolving the browser lockfile. No native
 checker release is needed. Recheck npm before publication: an existing version

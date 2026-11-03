@@ -57,6 +57,34 @@ test('server tests complete and navigate through their package, app and dependen
     assert(result.special.some(location => location.uri === 'file:///app/tests/server_tests/test%20%231%25.py'));
 }));
 
+test('ordinary function body edits in test helpers refresh their inferred return types', () => withBrowser(async page => {
+    const result = await page.evaluate(async () => {
+        const { BrowserAnalysisSession } = await import('/session.mjs');
+        const helper = '/app/tests/server_tests/helpers.py';
+        const uri = 'file:///app/tests/server_tests/test_body.py';
+        const session = new BrowserAnalysisSession({ workerUrl: '/worker.mjs', rootUri: 'file:///app', files: {
+            '/app/anvil.yaml': 'package_name: Main\n',
+            '/app/client_code/__init__.py': '',
+            '/app/server_code/__init__.py': '',
+            '/app/.anvil/server-tests.json': 'true',
+            '/app/tests/server_tests/__init__.py': '',
+            [helper]: 'def value():\n    return 42\n',
+            '/app/tests/server_tests/test_body.py': 'from .helpers import value\nresult = value()\nresult.\n',
+        } });
+        const complete = async () => (await session.query('textDocument/completion', {
+            textDocument: { uri }, position: { line: 2, character: 7 }, context: { autoImport: false },
+        })).result.items.map(item => item.label);
+        try {
+            const before = await complete();
+            await session.updateFiles({ [helper]: 'def value():\n    return "updated"\n' });
+            return { before, after: await complete() };
+        } finally { session.dispose(); }
+    });
+    assert(result.before.includes('bit_length'));
+    assert(result.after.includes('upper'));
+    assert(!result.after.includes('bit_length'));
+}));
+
 test('pytest APIs load lazily from test requirements without enabling them for ordinary server code', () => withBrowser(async page => {
     const result = await page.evaluate(async () => {
         const { BrowserAnalysisSession } = await import('/session.mjs');

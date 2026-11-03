@@ -1797,9 +1797,10 @@ function updateSources(before) {
     const updates = [];
     for (const path of new Set([...before.keys(), ...current.keys()])) {
         if (before.get(path) === current.get(path)) continue;
-        // This fast path patches projected app modules. Plain test files are
-        // mounted at their original paths and use the ordinary file update.
-        if (!projections.has(path) || !before.has(path) || !current.has(path) || !path.endsWith('.py')) return false;
+        // The prepared app catalogue includes both runtimes, even when the
+        // active projection excludes one. Raw test files aren't in it.
+        const appSource = Object.hasOwn(preparedViews.get(isServer)?.prepared.sourceEnvironments ?? {}, path);
+        if (!appSource || !before.has(path) || !current.has(path) || !path.endsWith('.py')) return false;
         const rendered = sourceUpdate(JSON.stringify({ before: before.get(path), after: current.get(path),
             schema: appConfigs[root]?.db_schema ?? null, formClass: formClasses.get(path) ?? null }));
         if (!rendered) return false;
