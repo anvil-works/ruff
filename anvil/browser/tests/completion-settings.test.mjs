@@ -284,6 +284,50 @@ test('delayed completion returns imports without repeating ordinary suggestions'
     assert(result.every(item => item.additionalTextEdits?.length));
 }));
 
+test('delayed completion reuses imported modules and aliases without adding an import', () => withBrowser(async page => {
+    const results = await page.evaluate(async () => {
+        const { BrowserAnalysisSession } = await import('/session.mjs');
+        const uri = 'file:///app/main.py';
+        const session = new BrowserAnalysisSession({ workerUrl: '/worker.mjs', rootUri: 'file:///app', files: {
+            '/app/main.py': '', '/app/other.py': 'class Rocket: pass\n',
+        } });
+        try {
+            const results = [];
+            for (const [prefix, insertion] of [
+                ['', 'Rocket'],
+                ['import other\n', 'other.Rocket'],
+                ['import other as library\n', 'library.Rocket'],
+            ]) {
+                const source = prefix + 'RocketLocal = 42\nRock';
+                await session.openDocument(uri, source);
+                const params = { textDocument: { uri }, position: { line: source.split('\n').length - 1, character: 4 } };
+                const ordinary = (await session.query('textDocument/completion', {
+                    ...params, context: { autoImport: false },
+                })).result.items;
+                for (let step = 0; ; step++) {
+                    if (step === 1000) throw new Error('Completion preparation did not finish');
+                    if ((await session.query('anvil/prepareCompletion', { textDocument: { uri } })).result.complete) break;
+                }
+                const defaults = (await session.query('textDocument/completion', params)).result.items;
+                const delayed = (await session.query('textDocument/completion', {
+                    ...params, context: { autoImport: 'only' },
+                })).result.items;
+                results.push({ prefix, insertion, ordinary, defaults, delayed });
+            }
+            return results;
+        } finally { session.dispose(); }
+    });
+    for (const { prefix, insertion, ordinary, defaults, delayed } of results) {
+        assert(ordinary.some(item => item.label === 'RocketLocal'));
+        assert(!ordinary.some(item => (item.insertText ?? item.label) === insertion));
+        assert(defaults.some(item => (item.insertText ?? item.label) === insertion), JSON.stringify({ prefix, defaults }));
+        const completion = delayed.find(item => (item.insertText ?? item.label) === insertion);
+        assert(completion, `Missing delayed suggestion after ${JSON.stringify(prefix)}`);
+        assert.equal(!!completion.additionalTextEdits?.length, !prefix);
+        assert(!delayed.some(item => item.label === 'RocketLocal'));
+    }
+}));
+
 test('completion preparation preserves edited types and discovers newly added exports', () => withBrowser(async page => {
     const result = await page.evaluate(async () => {
         const { BrowserAnalysisSession } = await import('/session.mjs');
@@ -393,10 +437,11 @@ test('auto-imports exclude generated Form declarations and checker helpers but r
         } });
         try {
             const answers = [];
-            for (const prefix of ['anvil_designer', 'EditorTemp', 'LaxDec']) {
-                await session.openDocument(uri, prefix);
+            for (const source of ['anvil_designer', 'EditorTemp', 'LaxDec',
+                'import Main.Editor._anvil_designer as designer\nEditorTemp']) {
+                await session.openDocument(uri, source);
                 answers.push((await session.query('textDocument/completion', { textDocument: { uri },
-                    position: { line: 0, character: prefix.length } })).result.items);
+                    position: { line: source.split('\n').length - 1, character: source.split('\n').at(-1).length } })).result.items);
             }
             const server = 'file:///app/server_code/main.py';
             await session.openDocument(server, 'Decim');
@@ -417,5 +462,7 @@ test('auto-imports exclude generated Form declarations and checker helpers but r
         JSON.stringify(imports.map(item => [item.label, item.labelDetails])));
     assert(!imports.some(item => item.labelDetails?.description?.startsWith('ty_extensions')),
         JSON.stringify(imports.map(item => [item.label, item.labelDetails])));
+    assert(!results.answers.flat().some(item => item.label.endsWith('EditorTemplate')),
+        'Reusing an existing generated-module import must not suggest its checker declarations');
     assert(results.explicit.some(item => item.label === 'EditorTemplate'));
 }));

@@ -167,7 +167,8 @@ previews. IDE-owned app source mappings identify editable app items.
 
 Completion defaults to upstream auto-import search. Optional
 `context.autoImport: false` returns ordinary suggestions without that search;
-`context.autoImport: "only"` returns only native suggestions with import edits.
+`context.autoImport: "only"` returns only native auto-import search results,
+including qualified references that reuse an existing import without editing it.
 Import-only queries return `preparationRequired: true` and no items until the
 current workspace index is ready. The IDE calls `anvil/prepareCompletion` with
 `textDocument.uri` in yielded batches until `{ complete: true }`, then retries.

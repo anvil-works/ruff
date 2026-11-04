@@ -2284,7 +2284,11 @@ function request(method, params) {
             ? { uri: params.textDocument.uri, position: params.position, revision } : undefined;
         const mapNativeCompletion = item => {
             try {
-                let module = item.module_name;
+                const importModule = item.module_name;
+                // A global search can reuse an existing import and insert a qualified name
+                // without editing imports. It still belongs to the delayed search results.
+                if (params.context?.autoImport === 'only' && !importModule) return [];
+                let module = importModule;
                 if (!module && item.kind === ty.CompletionKind.Module && (fromImport || absoluteImport))
                     module = modulePrefix ? `${modulePrefix}.${item.name}` : item.name;
                 if (!isServer && sourceEnvironments.size && module && !clientRuntime.moduleSupported(module)) return [];
@@ -2298,7 +2302,7 @@ function request(method, params) {
                 if (additionalTextEdits?.some(edit => !edit.range || !originalRange(path, edit.range))) return [];
                 // Generated Form bases and checker support types are not app imports.
                 // Keep explicit imports and ordinary references available for navigation.
-                if (additionalTextEdits?.length && (module?.split('.').includes('_anvil_designer') ||
+                if (importModule && (module?.split('.').includes('_anvil_designer') ||
                     module === 'ty_extensions' || module?.startsWith('ty_extensions.'))) return [];
                 return [{ label: item.name, kind: item.kind === undefined ? undefined : item.kind + 1,
                     labelDetails: module && additionalTextEdits?.length ? { description: module } : undefined,
@@ -2316,7 +2320,7 @@ function request(method, params) {
             for (const item of items)
                 if ([2, 3, 4, 7].includes(item.kind)) item.data = { ...item.data, insertParentheses: false };
         if (params.context?.autoImport === 'only') return { isIncomplete: false,
-            items: items.filter(item => item.additionalTextEdits?.length).map((item, index) =>
+            items: items.map((item, index) =>
                 ({ ...item, sortText: String(index).padStart(8, '0') })) };
         // Promote matching names already in scope. Keep Ty's order for keywords,
         // auto-imports and fuzzy matches rather than burying useful keywords.
