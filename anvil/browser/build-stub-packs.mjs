@@ -30,8 +30,11 @@ const licences = await readdir(new URL('LICENSES/', serverManifest));
 for (const filename of licences) {
     await writeFile(new URL(filename, output), await readFile(new URL(`LICENSES/${filename}`, serverManifest)));
 }
+// Static URL expressions let bundlers emit each pack as a separate lazy asset.
+const packSources = packs.map(({ url, ...metadata }) =>
+    `{ ...${JSON.stringify(metadata)}, url: new URL(${JSON.stringify(url)}, import.meta.url) }`);
 await writeFile(new URL('./dist/stub-packs.mjs', import.meta.url),
-    `export const stubPacks = ${JSON.stringify(packs)}.map(pack => ({...pack, url: new URL(pack.url, import.meta.url)}));\n`);
+    `export const stubPacks = [\n${packSources.join(',\n')}\n];\n`);
 // Standalone browser sessions have a separate default asset. The IDE supplies
 // its own generated asset and omits this default from its copied engine files.
 const apiRoot = new URL('../api-stubs/', import.meta.url);

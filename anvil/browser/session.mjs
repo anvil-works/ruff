@@ -9,7 +9,9 @@ export class BrowserAnalysisSession {
     #shutdown = new AbortController();
 
     constructor({ workerUrl, rootUri, files, apiStubsUrl }) {
-        this.#worker = new Worker(workerUrl, { type: 'module' });
+        this.#worker = workerUrl
+            ? new Worker(workerUrl, { type: 'module' })
+            : new Worker(new URL('./worker.mjs', import.meta.url), { type: 'module' });
         this.#remote = Comlink.wrap(this.#worker);
         this.#worker.onerror = (event) => this.#stop(new Error(event.message || 'ty worker failed'));
         this.#queue = this.#send('initialize', { rootUri, files, apiStubsUrl }).catch(error => this.#stop(error));

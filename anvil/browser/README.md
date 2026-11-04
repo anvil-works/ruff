@@ -146,8 +146,11 @@ builds and tests the installed archive, then uploads it for review; it never
 publishes to npm. See [publication order](../PUBLISHING.md#ide-browser-assets).
 
 Serve this directory with JavaScript and WebAssembly MIME types. Create a
-`BrowserAnalysisSession` from `session.mjs`, passing the URL of `worker.mjs`, a
-`file:` project root URI and a map of absolute paths to source strings.
+`BrowserAnalysisSession` from `session.mjs`, passing a `file:` project root URI
+and a map of absolute paths to source strings. By default, the session locates
+`worker.mjs` beside its own module. Bundlers can follow that worker and its WASM
+and stub assets through standard `new URL(..., import.meta.url)` expressions.
+Standalone consumers can supply `workerUrl` to override the default location.
 
 Comlink handles request correlation and remote exceptions. The session preserves
 ordered source updates and revision checks, rejects pending calls on worker failure

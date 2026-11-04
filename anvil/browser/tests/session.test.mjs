@@ -35,6 +35,22 @@ test('standard Comlink clients receive ordered results and worker exceptions wit
     assert.deepEqual(result.recovered, result.response);
 }));
 
+test('sessions locate their worker relative to the session module without an explicit URL', () => withBrowser(async page => {
+    const labels = await page.evaluate(async () => {
+        history.replaceState(null, '', '/nested/editor');
+        const { BrowserAnalysisSession } = await import('/session.mjs');
+        const session = new BrowserAnalysisSession({
+            rootUri: 'file:///app', files: { '/app/main.py': 'name = "Ada"\nname.up' },
+        });
+        try {
+            return (await session.query('textDocument/completion', {
+                textDocument: { uri: 'file:///app/main.py' }, position: { line: 1, character: 7 },
+            })).result.items.map(item => item.label);
+        } finally { session.dispose(); }
+    });
+    assert(labels.includes('upper'));
+}));
+
 test('session cancellation and disposal settle pending queries without losing later results', () => withBrowser(async page => {
     const result = await page.evaluate(async () => {
         const { BrowserAnalysisSession } = await import('/session.mjs');
