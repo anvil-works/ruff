@@ -7,6 +7,7 @@
 
 from typing import Any, Callable, TypeVar, overload, Literal, Generic
 from typing_extensions import ParamSpec, TypeVar as TypeVarWithDefault
+from anvil import Media
 from anvil.tables import Row
 
 _T = TypeVar("_T")

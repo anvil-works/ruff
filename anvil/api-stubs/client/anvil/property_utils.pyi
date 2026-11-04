@@ -6,30 +6,48 @@
 
 [Anvil Docs](https://anvil.works/docs/client/forms/advanced-layouts/component-api/property-utils-module)"""
 
-from typing import Any, Callable, Literal, Mapping, Protocol
+from typing import Any, Callable, Literal, Mapping, Protocol, TYPE_CHECKING, type_check_only
 
 from anvil import Component, MarginPropertyValue, PaddingPropertyValue, SpacingLength, SpacingPropertyValue
 from anvil.js import window
 
-PropertyType = Literal[
-    "string",
-    "number",
-    "boolean",
-    "text[]",
-    "enum",
-    "form",
-    "object",
-    "dict",
-    "color",
-    "icon",
-    "themeRole",
-    "uri",
-    "html",
-    "recordType",
-    "margin",
-    "padding",
-    "spacing",
+# Type helpers are available for annotations, but not auto-import suggestions.
+__all__ = [
+    "anvil_property",
+    "get_form_constructor",
+    "get_margin_styles",
+    "get_padding_styles",
+    "get_spacing_styles",
+    "get_unset_margin",
+    "get_unset_padding",
+    "get_unset_spacing",
+    "get_unset_value",
+    "set_element_margin",
+    "set_element_padding",
+    "set_element_spacing",
+    "set_element_visibility",
 ]
+
+if TYPE_CHECKING:
+    PropertyType = Literal[
+        "string",
+        "number",
+        "boolean",
+        "text[]",
+        "enum",
+        "form",
+        "object",
+        "dict",
+        "color",
+        "icon",
+        "themeRole",
+        "uri",
+        "html",
+        "recordType",
+        "margin",
+        "padding",
+        "spacing",
+    ]
 
 
 class anvil_property(property):
@@ -47,6 +65,7 @@ class anvil_property(property):
     def fset(self) -> Any: ...
 
 
+@type_check_only
 class InstantiatorFunction(Protocol):
     """Callable that constructs a form/component instance from a form property value."""
 

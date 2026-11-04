@@ -3,6 +3,88 @@ import { test } from 'node:test';
 import { readFile } from 'node:fs/promises';
 import { withBrowser } from './browser.mjs';
 
+test('member completion uses the receiver at the cursor, including inside an existing name', () => withBrowser(async page => {
+    const cases = await page.evaluate(async () => {
+        const ty = await import('/dist/wasm/ty_wasm.js');
+        await ty.default();
+        const workspace = new ty.Workspace('/app', ty.PositionEncoding.Utf16, {});
+        const packageFile = workspace.openFile('/app/tools/__init__.py', 'def confirm(): pass\n');
+        const api = workspace.openFile('/app/tools/api.py', 'def call() -> str: return "result"\ndef cancel(): pass\n');
+        try {
+            return [
+                ['import tools.api\ntools.api.c¦all()', 'call', 'confirm'],
+                ['import tools.api as library\nlibrary.c¦all()', 'call', 'confirm'],
+                ['import tools.api\ntools.api.¦call()', 'call', 'confirm'],
+                ['import tools.api\ntools.api.¦ call()', 'call', 'confirm'],
+                ['import tools.api\ntools.api.c¦all().capitalize()', 'call', 'capitalize'],
+                ['import tools.api\ntools.api¦.call()', 'api', 'call'],
+                ['import tools.api\n(tools.api).c¦all()', 'call', 'confirm'],
+                ['import tools.api\ntools.api.call().up¦per()', 'upper', 'call'],
+                ['import tools.api\ntools.api.¦.call()', 'call', 'confirm'],
+            ].map(([marked, included, excluded]) => {
+                const offset = marked.indexOf('¦');
+                const code = marked.replace('¦', '');
+                const lines = code.slice(0, offset).split('\n');
+                const source = workspace.openFile('/app/main.py', code);
+                try {
+                    const labels = workspace.completions(source, new ty.Position(lines.length, lines.at(-1).length + 1), false)
+                        .map(item => { try { return item.name; } finally { item.free(); } });
+                    return { marked, included, excluded, labels };
+                } finally { workspace.closeFile(source); }
+            });
+        } finally { api.free(); packageFile.free(); workspace.free(); }
+    });
+    for (const { marked, included, excluded, labels } of cases) {
+        assert(labels.includes(included), `${marked}: missing ${included}: ${labels.join(', ')}`);
+        assert(!labels.includes(excluded), `${marked}: unexpected ${excluded}`);
+    }
+}));
+
+test('completion exposes native typing-only metadata without hiding explicit type references', () => withBrowser(async page => {
+    const items = await page.evaluate(async () => {
+        const ty = await import('/dist/wasm/ty_wasm.js');
+        await ty.default();
+        const workspace = new ty.Workspace('/app', ty.PositionEncoding.Utf16, {});
+        const helper = workspace.openFile('/app/helpers.pyi', 'from typing import TYPE_CHECKING, type_check_only\n@type_check_only\nclass Helper: ...\nif TYPE_CHECKING:\n    Alias = str | int\nclass Runtime: ...\n');
+        const source = workspace.openFile('/app/main.py', 'import helpers\nhelpers.');
+        try {
+            return workspace.completions(source, new ty.Position(2, 9), false).map(item => {
+                try { return { name: item.name, typingOnly: item.is_type_check_only }; }
+                finally { item.free(); }
+            });
+        } finally { source.free(); helper.free(); workspace.free(); }
+    });
+    for (const name of ['Helper', 'Alias']) assert.equal(items.find(item => item.name === name)?.typingOnly, true, name);
+    assert.equal(items.find(item => item.name === 'Runtime')?.typingOnly, false);
+}));
+
+test('typing-only completion metadata follows native TYPE_CHECKING contexts', () => withBrowser(async page => {
+    const results = await page.evaluate(async () => {
+        const ty = await import('/dist/wasm/ty_wasm.js');
+        await ty.default();
+        const workspace = new ty.Workspace('/app', ty.PositionEncoding.Utf16, {});
+        const helper = workspace.openFile('/app/helpers.pyi', 'from typing import type_check_only\n@type_check_only\nclass Helper: ...\n');
+        try {
+            return [
+                ['import helpers\nhelpers.He¦', true],
+                ['from helpers import He¦', true],
+                ['from typing import TYPE_CHECKING\nimport helpers\nif TYPE_CHECKING:\n    Alias = helpers.He¦', false],
+                ['import typing as t\nif t.TYPE_CHECKING:\n    from helpers import He¦', false],
+            ].map(([marked, expected]) => {
+                const offset = marked.indexOf('¦'), code = marked.replace('¦', '');
+                const lines = code.slice(0, offset).split('\n');
+                const source = workspace.openFile('/app/main.py', code);
+                try {
+                    const items = workspace.completions(source, new ty.Position(lines.length, lines.at(-1).length + 1), false);
+                    try { return { marked, expected, actual: items.find(item => item.name === 'Helper')?.requires_type_checking }; }
+                    finally { items.forEach(item => item.free()); }
+                } finally { workspace.closeFile(source); }
+            });
+        } finally { helper.free(); workspace.free(); }
+    });
+    for (const { marked, expected, actual } of results) assert.equal(actual, expected, marked);
+}));
+
 test('builtin reference classification preserves shadowing and project overrides', () => withBrowser(async page => {
     const result = await page.evaluate(async () => {
         const ty = await import('/dist/wasm/ty_wasm.js');

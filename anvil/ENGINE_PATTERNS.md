@@ -26,6 +26,14 @@ Generic WASM API extensions expose existing engine behaviour:
     scopes or class MRO. Native inference, member deduplication and ranking stay
     unchanged. The browser adapter uses this provenance to rank local bindings
     and own-class members ahead of outer or inherited ones.
+- Completion items expose the native `is_type_check_only` flag and its existing
+    context demotion as `requires_type_checking`. The latter reuses the native
+    ranking result, including semantic `TYPE_CHECKING` blocks and stub files.
+    The IDE hides typing helpers in runtime expressions and imports, while
+    retaining annotations and type-checking blocks. No inference query or
+    documentation lookup is added. Anvil stubs declare runtime `__all__`
+    exports separately, because native auto-import indexing does not carry this
+    per-declaration flag.
 - `Workspace.isBuiltinReference` returns `true` only for a bare name proven to
     use a standard builtin. It exposes the existing semantic binding check without
     inferring the reference's type. Shadowed names, attributes, project builtin
@@ -54,6 +62,14 @@ Ruff for formatting; its type inference and other language services are unchange
 Remove this local build extension when upstream provides the same option.
 
 ## Completion work
+
+Attribute completion admits an attribute whose receiver ends strictly before the
+cursor, including whitespace after the dot and names continuing after the cursor. The upstream range
+check instead required the whole attribute to end before the cursor and could
+select the parent receiver (for example, `anvil` in `anvil.server.c|all`). Later
+attributes remain excluded. This general completion-target fix has no Anvil
+inference exception; remove it when upstream adopts an equivalent fix. Browser
+API tests cover nested names, aliases and cursor boundaries.
 
 Scoped completion applies its existing name matcher before resolving module
 members, including builtins. The module-member implementation is shared with

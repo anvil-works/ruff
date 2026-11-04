@@ -6,22 +6,87 @@
 # Generated files: client/anvil/__init__.pyi, server/anvil/__init__.pyi
 
 from datetime import date as _date, datetime as _datetime
-from typing import Any, Callable, ClassVar, Generic, Iterable, overload, Iterator, Mapping, Literal, TypedDict
+from typing import Any, Callable, ClassVar, Generic, Iterable, overload, Iterator, Mapping, Literal, TypedDict, TYPE_CHECKING, type_check_only
 from typing_extensions import TypeVar, Unpack, deprecated, override
 
 from . import property_utils
 
+# Runtime exports bound the auto-import index; typing helpers remain explicitly importable.
+__all__ = [
+    "BlobMedia",
+    "Media",
+    "URLMedia",
+    "app",
+    "is_server_side",
+]
+
+__all__ += [
+    "Attrs",
+    "Button",
+    "Canvas",
+    "CheckBox",
+    "Classes",
+    "ColumnPanel",
+    "Component",
+    "Container",
+    "DataGrid",
+    "DataRowPanel",
+    "DatePicker",
+    "DropDown",
+    "FileLoader",
+    "FlowPanel",
+    "GoogleMap",
+    "GridPanel",
+    "HtmlComponent",
+    "HtmlPanel",
+    "HtmlTemplate",
+    "Image",
+    "Label",
+    "LinearPanel",
+    "Link",
+    "Notification",
+    "Plot",
+    "RadioButton",
+    "RepeatingPanel",
+    "RichText",
+    "Slot",
+    "Spacer",
+    "Style",
+    "TextArea",
+    "TextBox",
+    "Timer",
+    "WithLayout",
+    "XYPanel",
+    "YouTubeVideo",
+    "alert",
+    "confirm",
+    "download",
+    "get_focused_component",
+    "get_open_form",
+    "get_url_hash",
+    "handle",
+    "js",
+    "open_form",
+    "pluggable_ui",
+    "set_default_error_handling",
+    "set_url_hash",
+]
+
+
 _T = TypeVar("_T")
 _F = TypeVar("_F", bound=Callable[..., Any])
 
-SpacingLength = str | int | float | None
-MarginPropertyValue = (
-    SpacingLength
-    | tuple[SpacingLength, SpacingLength]
-    | tuple[SpacingLength, SpacingLength, SpacingLength]
-    | tuple[SpacingLength, SpacingLength, SpacingLength, SpacingLength]
-)
-PaddingPropertyValue = MarginPropertyValue
+# These declarations describe accepted values; they are not runtime exports.
+if TYPE_CHECKING:
+    SpacingLength = str | int | float | None
+    MarginPropertyValue = (
+        SpacingLength
+        | tuple[SpacingLength, SpacingLength]
+        | tuple[SpacingLength, SpacingLength, SpacingLength]
+        | tuple[SpacingLength, SpacingLength, SpacingLength, SpacingLength]
+    )
+    PaddingPropertyValue = MarginPropertyValue
+
 _ClassesValue = str | list[str] | Mapping[str, bool] | None
 _StyleScalar = str | int | float
 _StylePropertyValue = _StyleScalar | list[_StyleScalar]
@@ -30,6 +95,7 @@ _StyleValue = str | Mapping[str, _StylePropertyValue] | None
 _AttrValue = Any
 _AttrsValue = Mapping[str, _AttrValue] | None
 
+@type_check_only
 class SpacingPropertyValue(TypedDict, total=False):
     margin: MarginPropertyValue
     padding: PaddingPropertyValue
@@ -151,6 +217,7 @@ class URLMedia(Media):
 # App Information
 # ============================================================================
 
+@type_check_only
 class AppEnvironment:
     """Information about the current app environment."""
 
@@ -161,6 +228,7 @@ class AppEnvironment:
     """Tags associated with the current environment."""
 
 
+@type_check_only
 class AppInfo:
     """Information about the current app.
 
@@ -372,6 +440,7 @@ def set_default_error_handling(handler_fn: Callable[[Exception], None] | None, /
 # Pluggable UI Registry (client-only)
 # ============================================================================
 
+@type_check_only
 class PluggableUI(Mapping[str, Any]):
     """Registry of pluggable UI classes and hooks."""
 

@@ -2304,6 +2304,8 @@ function request(method, params) {
                     labelDetails: module && additionalTextEdits?.length ? { description: module } : undefined,
                     detail: item.detail, documentation: item.documentation, insertText: item.insert_text, additionalTextEdits,
                     data: { ...(documentation ? { documentation } : {}),
+                        typeCheckOnly: item.is_type_check_only,
+                        requiresTypeChecking: item.requires_type_checking,
                         implicitSelf: item.name.startsWith('self.') && !additionalTextEdits?.length,
                         scopeDepth: item.scope_depth, inheritanceDepth: item.inheritance_depth } }];
             } finally { item.free(); }

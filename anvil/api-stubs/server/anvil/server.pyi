@@ -7,6 +7,7 @@
 
 from typing import Any, Callable, TypeVar, overload, Literal, Generic
 from typing_extensions import ParamSpec, TypeVar as TypeVarWithDefault
+from anvil import Media
 from anvil.tables import Row
 
 _T = TypeVar("_T")
@@ -578,7 +579,7 @@ class HttpRequest:
     """The path of the current request, e.g. /foo/bar
 
     [Anvil Docs](https://anvil.works/docs/external-resources/http-apis/creating-http-endpoints)"""
-    body: bytes
+    body: Media | None
     """[Anvil Docs](https://anvil.works/docs/external-resources/http-apis/creating-http-endpoints)"""
     body_json: Any | None
     """The decoded JSON body of the HTTP request, if applicable. Only available when Content-Type header is 'application/json'.

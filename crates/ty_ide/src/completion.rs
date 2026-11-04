@@ -426,6 +426,11 @@ pub struct Completion<'db> {
 }
 
 impl<'db> Completion<'db> {
+    /// Whether this typing-only item is outside a stub or `TYPE_CHECKING` block.
+    pub fn requires_type_checking(&self) -> bool {
+        self.relevance.type_check_only == Sort::Lower
+    }
+
     pub fn label(&self) -> &str {
         self.label
             .as_deref()
@@ -2622,13 +2627,11 @@ impl<'t> CompletionTargetTokens<'t> {
                 let covering_node = cursor
                     .covering_node(object.range())
                     .find_last(|node| {
-                        // We require that the end of the node range not
-                        // exceed the cursor offset. This avoids selecting
-                        // a node "too high" in the AST in cases where
-                        // completions are requested in the middle of an
-                        // expression. e.g., `foo.<CURSOR>.bar`.
-                        if node.is_expr_attribute() {
-                            return node.range().end() <= cursor.offset;
+                        // The cursor may precede or be inside an existing name.
+                        // A strict receiver boundary admits whitespace after the dot
+                        // but excludes later attributes in `foo.bar<CURSOR>.baz`.
+                        if let ast::AnyNodeRef::ExprAttribute(expr) = node {
+                            return expr.value.end() < cursor.offset;
                         }
                         // For import statements though, they can't be
                         // nested, so we don't care as much about the

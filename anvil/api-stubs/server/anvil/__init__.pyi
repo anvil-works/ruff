@@ -6,21 +6,38 @@
 # Generated files: client/anvil/__init__.pyi, server/anvil/__init__.pyi
 
 from datetime import date as _date, datetime as _datetime
-from typing import Any, Callable, ClassVar, Generic, Iterable, overload, Iterator, Mapping, Literal, TypedDict
+from typing import Any, Callable, ClassVar, Generic, Iterable, overload, Iterator, Mapping, Literal, TypedDict, TYPE_CHECKING, type_check_only
 from typing_extensions import TypeVar, Unpack, deprecated, override
 
+
+# Runtime exports bound the auto-import index; typing helpers remain explicitly importable.
+__all__ = [
+    "BlobMedia",
+    "Media",
+    "URLMedia",
+    "app",
+    "is_server_side",
+]
+
+
+__all__ += [
+    "secrets",
+]
 
 _T = TypeVar("_T")
 _F = TypeVar("_F", bound=Callable[..., Any])
 
-SpacingLength = str | int | float | None
-MarginPropertyValue = (
-    SpacingLength
-    | tuple[SpacingLength, SpacingLength]
-    | tuple[SpacingLength, SpacingLength, SpacingLength]
-    | tuple[SpacingLength, SpacingLength, SpacingLength, SpacingLength]
-)
-PaddingPropertyValue = MarginPropertyValue
+# These declarations describe accepted values; they are not runtime exports.
+if TYPE_CHECKING:
+    SpacingLength = str | int | float | None
+    MarginPropertyValue = (
+        SpacingLength
+        | tuple[SpacingLength, SpacingLength]
+        | tuple[SpacingLength, SpacingLength, SpacingLength]
+        | tuple[SpacingLength, SpacingLength, SpacingLength, SpacingLength]
+    )
+    PaddingPropertyValue = MarginPropertyValue
+
 _ClassesValue = str | list[str] | Mapping[str, bool] | None
 _StyleScalar = str | int | float
 _StylePropertyValue = _StyleScalar | list[_StyleScalar]
@@ -29,6 +46,7 @@ _StyleValue = str | Mapping[str, _StylePropertyValue] | None
 _AttrValue = Any
 _AttrsValue = Mapping[str, _AttrValue] | None
 
+@type_check_only
 class SpacingPropertyValue(TypedDict, total=False):
     margin: MarginPropertyValue
     padding: PaddingPropertyValue
@@ -150,6 +168,7 @@ class URLMedia(Media):
 # App Information
 # ============================================================================
 
+@type_check_only
 class AppEnvironment:
     """Information about the current app environment."""
 
@@ -160,6 +179,7 @@ class AppEnvironment:
     """Tags associated with the current environment."""
 
 
+@type_check_only
 class AppInfo:
     """Information about the current app.
 

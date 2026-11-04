@@ -588,6 +588,8 @@ impl Workspace {
                 Completion {
                     scope_depth: comp.scope_depth,
                     inheritance_depth: comp.inheritance_depth,
+                    is_type_check_only: comp.is_type_check_only,
+                    requires_type_checking: comp.requires_type_checking(),
                     name,
                     kind,
                     detail: type_display,
@@ -1401,6 +1403,8 @@ pub struct Hover {
 pub struct Completion {
     pub scope_depth: Option<u32>,
     pub inheritance_depth: Option<u32>,
+    pub is_type_check_only: bool,
+    pub requires_type_checking: bool,
     #[wasm_bindgen(getter_with_clone)]
     pub name: String,
     pub kind: Option<CompletionKind>,
