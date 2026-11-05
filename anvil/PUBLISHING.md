@@ -1,8 +1,7 @@
 # Publishing Anvil validation
 
-The checker lives in `anvil-works/ruff`. Its `anvil` branch carries one commit
-above upstream `main`, including the Anvil adapter, API stubs and
-npm packaging. The local checkout is `/Users/scork/Desktop/Projects/anvil-ruff`.
+The checker lives in `anvil-works/ruff`. Its `anvil` branch carries the
+Anvil adapter, reviewed engine extensions, API stubs and npm packaging. The local checkout is `/Users/scork/Desktop/Projects/anvil-ruff`.
 There is no submodule or separate wrapper repository to push.
 
 All pushing and publishing is performed by Stu. The workflow builds packages
@@ -14,10 +13,12 @@ finished after the checker exists on npm.
 
 The browser package has its own version in `anvil/browser/package.json`. A
 browser-only release does not require new native checker or Python-stub packages.
-The next browser candidate is `0.1.0-canary.11`; it requires
-`@anvil-works/python-stubs@0.1.0-canary.2` for optional pytest typing. Publish and
-verify that typing package before resolving the browser lockfile. No native
-checker release is needed. Recheck npm before publication: an existing version
+The next browser candidate is `0.1.0-canary.12`; it requires
+`@anvil-works/python-stubs@0.1.0-canary.2` for optional pytest typing. Verify that
+published typing package before resolving the browser lockfile. This release
+also needs native checker `0.1.0-canary.3`, because selective optional typing
+changes shared inference and the bundled Users/Row declarations. The typing pack
+version remains unchanged. Recheck npm before publication: an existing version
 cannot be replaced.
 
 Publish from the main checkout on `anvil`. Land reviewed changes on that branch
@@ -46,8 +47,8 @@ worktree. The release commit must also be on `origin/anvil` before npm publicati
 
 The browser workflow builds both WASM modules, tests the installed package in
 Chrome and uploads an npm archive. It has no npm credentials and never publishes.
-The IDE copies the installed package, including lazy packs and licence notices,
-under a versioned URL. Its Docker build needs neither Rust nor a sibling checkout.
+The IDE bundles the installed worker, WASM and lazy packs with its other
+content-hashed client assets, including their licence notices. Its Docker build needs neither Rust nor a sibling checkout.
 The native validation workflow remains separate.
 
 ## Independent Ruff browser package
@@ -73,7 +74,8 @@ availability immediately before publishing.
 This native release snapshot predates the browser integration. The browser branch
 also exposes generic engine APIs and completion optimisations;
 [ENGINE_PATTERNS.md](ENGINE_PATTERNS.md) describes the current differences.
-Inference and diagnostics remain upstream. The old method-assignment and built-in
+The selective optional extension is an intentional inference difference,
+documented in that guide. The old method-assignment and built-in
 division patches have been removed. See [ENGINE_PATTERNS.md](ENGINE_PATTERNS.md) for the
 accepted limitations. Earlier packages and diagnostic reports include those
 patches; rebuild release artifacts from the cleaned source before publication.
@@ -99,7 +101,7 @@ Read these paths in order:
     `environments.rs` and `policy.rs` for event bindings, imports and runtimes.
 1. Fork [ENGINE_PATTERNS.md](ENGINE_PATTERNS.md): accepted upstream typing limitations.
     Review `git diff main -- crates` against its documented engine differences;
-    they expose existing engine behaviour rather than Anvil inference rules.
+    they include generic browser APIs and the opt-in optional inference extension.
 1. CLI `src/cliProgram.ts`, `src/programBase.ts`, `src/commands/validate.ts`,
     `src/services/depsCache.ts` and `src/CLILogger.ts`: startup and command loading.
 1. Fork `anvil/package.py`, `anvil/collect_release.py`, `anvil/npm/package.json`
@@ -124,7 +126,6 @@ cd /Users/scork/Desktop/Projects/anvil-ruff
 git status --short
 git branch --show-current       # Should be anvil.
 git remote -v
-git rev-list --count main..anvil  # Should be 1.
 git rev-parse HEAD              # Record the release source revision.
 gs branch submit --branch anvil --no-publish --dry-run
 # Inspect the destination, then push the Anvil branch:
@@ -144,7 +145,7 @@ spaces. Smoke checks cover imports, forms, row models, custom events,
 client/server restrictions and UTF-16 diagnostics. Collection verifies clean,
 identical source snapshots, versions and bundled-file hashes before producing
 one wrapper and five native packages, with `RELEASE.json` and `SHA256SUMS`.
-Windows and Intel Mac still require their first successful runner execution.
+All five platforms must pass the current candidate's installed-package checks.
 
 ```sh
 gh run list --repo anvil-works/ruff --workflow anvil-release.yml --branch anvil
@@ -161,7 +162,7 @@ npm versions come from `anvil/npm/package.json`. For later releases, update its
 version, every optional dependency and the native crate version in
 `anvil/native/Cargo.toml` together. Refresh `anvil/native/Cargo.lock` with
 `cargo check --manifest-path anvil/native/Cargo.toml` before the locked build.
-The current candidate is `0.1.0-canary.1`.
+The current native candidate is `0.1.0-canary.3`.
 
 ## Publish the six checker packages
 

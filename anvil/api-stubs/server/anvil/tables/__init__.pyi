@@ -5,7 +5,7 @@
 # Type stubs for anvil.tables module
 # Generated files: client/anvil/tables/__init__.pyi, server/anvil/tables/__init__.pyi
 
-from typing import Any, Generic, TypeVar, Iterator, Callable, Iterable, Mapping, overload
+from typing import Any, Generic, TypeVar, Iterator, Callable, Iterable, Literal, Mapping, overload
 
 from anvil import Media
 
@@ -26,6 +26,7 @@ class Row:
         client_creatable: bool = False,
         client_deletable: bool = False,
     ) -> None: ...
+    def __bool__(self) -> Literal[True]: ...
     def __getitem__(self, key: str, /) -> Any: ...
     def __setitem__(self, key: str, value: Any, /) -> None: ...
     def __contains__(self, key: str, /) -> bool: ...

@@ -1,6 +1,6 @@
 {
   "repository": "https://github.com/anvil-works/anvil",
-  "revision": "0d5237f2e0f7665f1026f19fbcfc896aa263ea99",
+  "revision": "2aaafc0a7fe17b302c45b3453c0daa4cde9b6cd0",
   "files": {
     "anvil/__init__.pyi": "1b62cbd6cc9d29f53f6d92bd050130cd570e0ab40332803cfba448cbfa5f7f12",
     "anvil/designer.pyi": "6f1bf4ae07452b7b0d3a92f6ab19b2aa6d0ced7b6c27afdc8a30520a8cf54d52",
@@ -31,10 +31,10 @@
     "anvil/secrets.pyi": "6f4ac488faa2d8b37222de9d81b02bd01b49915f077f06930f72760d635eca41",
     "anvil/server.pyi": "20ecbd727ce72f608b8603691de6d754576be4428462d8418b52447ee7e6a68f",
     "anvil/stripe.pyi": "89d7fb384fc38dd18afe34fc379cea615b3f566b0da588b4089aced47a6960da",
-    "anvil/tables/__init__.pyi": "e3d88ef673fbfe10c6ebdd09a82b8def3c7e610c2ecd2ba9b764388301cb33b5",
+    "anvil/tables/__init__.pyi": "24af8bb12b7b65bdfa2e621a280614dc58284d266ef93864b8f2bc95cea04bcf",
     "anvil/tables/query.pyi": "4b3cf938337df1abd3e9569721c9dbbdd2ce7a84224f3f60fe0eb39b37641137",
     "anvil/tz.pyi": "b634ce6c6eb2e620c735725425421c4aadecc98c771520dc2f87a4828e9c90ad",
-    "anvil/users/__init__.pyi": "11fbb25653436fd227d4a7d2e55379b0b0fd80905ce5e6efe770c177d7992c61",
+    "anvil/users/__init__.pyi": "2d175baa9d4783fcbcd705c60c335665c4c30949b3fa68e62bfe07464eaed2da",
     "anvil/users/mfa.pyi": "29ebd04347d86578c5b4e3b2e003f219906353b4ff932964a9b2757e4eabd107",
     "stripe/__init__.pyi": "af2792bd0fb886d27aabaaa7dab3706a6dc01cd80ebd0f75c53e3136b054284c",
     "stripe/checkout.pyi": "483c8216963cd6d8db162cf2e95dc63e65b7032f1d10c3a4a4a469d223178a59"

@@ -5,7 +5,7 @@
 # Type stubs for anvil.users module
 # Generated files: client/anvil/users/__init__.pyi, server/anvil/users/__init__.pyi
 
-from typing import Any
+from typing import Annotated, Any
 from typing import Literal, overload
 from anvil.tables import Row
 from anvil.users import mfa as mfa
@@ -40,7 +40,7 @@ class PasswordResetRequested(Exception):
     ...
 
 # Functions available in both environments
-def get_user(allow_remembered: bool = True) -> Row | None:
+def get_user(allow_remembered: bool = True) -> Row | Annotated[None, "anvil:permissive-optional"]:
     """Get the row from the users table that corresponds to the currently logged-in user. If allow_remembered is true (the default), the user may have logged in in a previous session. Returns None if no user is logged in.
 
     [Anvil Docs](https://anvil.works/docs/users)"""

@@ -85,7 +85,7 @@ dependencies = [
 
 [[package]]
 name = "anvil-ty-native"
-version = "0.1.0-canary.2"
+version = "0.1.0-canary.3"
 dependencies = [
  "anvil-ty-compat",
  "anyhow",

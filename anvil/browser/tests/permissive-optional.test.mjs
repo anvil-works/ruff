@@ -5,22 +5,11 @@ import { withBrowser } from './browser.mjs';
 test('portable optional metadata preserves configured Users rows in client and server', () => withBrowser(async page => {
     const results = await page.evaluate(async () => {
         const { BrowserAnalysisSession } = await import('/session.mjs');
-        const stubs = await (await fetch('/dist/api-stubs.json')).json();
-        for (const environment of ['client', 'server']) {
-            const path = `${environment}/anvil/users/__init__.pyi`;
-            const signature = 'def get_user(allow_remembered: bool = True) -> Row | None:';
-            if (!stubs.files[path].includes(signature)) throw new Error('Users stub fixture changed');
-            stubs.files[path] = 'from typing import Annotated\n' + stubs.files[path].replace(
-                signature,
-                'def get_user(allow_remembered: bool = True) -> Row | Annotated[None, "anvil:permissive-optional"]:',
-            );
-        }
-        const apiStubsUrl = URL.createObjectURL(new Blob([JSON.stringify(stubs)], { type: 'application/json' }));
         const config = (name, type) => JSON.stringify({ package_name: 'Main',
             db_schema: { users: { columns: [{ name, type }] } },
             services: [{ source: '/runtime/services/anvil/users', server_config: { user_table: 'users' } }],
         });
-        const session = new BrowserAnalysisSession({ workerUrl: '/worker.mjs', apiStubsUrl,
+        const session = new BrowserAnalysisSession({ workerUrl: '/worker.mjs',
             rootUri: 'file:///app', files: { '/app/anvil.yaml': config('nickname', 'string'),
                 '/app/client_code/main.py': '', '/app/server_code/main.py': '',
                 '/app/server_code/api.py': 'import anvil.server\nimport anvil.users\n' +
@@ -73,7 +62,6 @@ test('portable optional metadata preserves configured Users rows in client and s
             return { results, changed, rpc, rpcDiagnostics };
         } finally {
             session.dispose();
-            URL.revokeObjectURL(apiStubsUrl);
         }
     });
     for (const { environment, members, field, keys, diagnostics, hover, hints } of results.results) {

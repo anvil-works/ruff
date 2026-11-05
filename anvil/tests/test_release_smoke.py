@@ -147,6 +147,36 @@ class InstalledRelease(unittest.TestCase):
             [item["rule"] for item in diagnostics], ["reportAnvilInvalidEvent"]
         )
 
+    def test_optional_user_rows_keep_none_checks_and_column_errors(self):
+        config = self.app / "anvil.yaml"
+        self.write(
+            "anvil.yaml",
+            config.read_text() + "services:\n- source: /runtime/services/anvil/users\n"
+            "  server_config: {user_table: people}\n",
+        )
+        code = (
+            "import anvil.users\nuser = anvil.users.get_user()\n"
+            'name: str = user["name"]\n'
+            'if not user:\n    user["name"]\n'
+            "else:\n    user.update(name=123)\n"
+            "def ordinary(value: str | None):\n    value.upper()\n"
+        )
+        for environment in ("client", "server"):
+            with self.subTest(environment=environment):
+                file = self.write(f"{environment}_code/Users.py", code)
+                diagnostics = self.validate(1, file)
+                self.assertEqual(
+                    [
+                        (item["rule"], item["range"]["start"]["line"])
+                        for item in diagnostics
+                    ],
+                    [
+                        ("not-subscriptable", 4),
+                        ("invalid-argument-type", 6),
+                        ("unresolved-attribute", 8),
+                    ],
+                )
+
     def test_invalid_assignment_keeps_original_path_and_utf16_range(self):
         file = self.write(
             "server_code/Broken.py", "marker = '😀'; count: int = 'wrong'\n"
