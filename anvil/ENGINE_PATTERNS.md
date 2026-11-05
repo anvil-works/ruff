@@ -1,7 +1,46 @@
 # Upstream engine compatibility
 
-Anvil uses upstream ty inference and diagnostics. Anvil-specific support lives
-in the adapter, generated declarations and API stubs under `anvil/`.
+Anvil uses upstream ty inference and diagnostics by default. Anvil-specific
+support lives in the adapter, generated declarations and API stubs under `anvil/`.
+The opt-in optional type described below is an intentional inference extension.
+
+## Selective optional return values
+
+`Annotated[..., "anvil:permissive-optional"]` lets declarations permit ordinary
+use of selected optional values while retaining the concrete result types. For
+example, the Users declaration can use:
+
+```python
+from typing import Annotated
+from anvil.tables import Row
+
+def get_user(allow_remembered: bool = True) -> Row | Annotated[None, "anvil:permissive-optional"]: ...
+```
+
+The value can still be None at runtime. Its concrete members, arguments and
+field values are checked normally. A flow branch that proves the value is None
+checks it as ordinary None. Unmarked optional values keep upstream behaviour.
+Other checkers ignore the standard metadata and retain `Row | None`.
+
+The None arm uses a bounded gradual type with upper bound None and lower bound
+Never. Operation lookup removes that arm alongside concrete alternatives;
+relations and set operations reuse ty's existing `Any & None` algebra. Inferred
+annotation edits print the portable Annotated expression and reuse the standard
+importer, so RPC and Form-item return inference preserve the policy. Hover and
+inlay labels show the shorter `Row | None`; generated annotation edits use
+`DisplayType::for_type_annotation` to retain the metadata and its import.
+
+The annotation applies only to visible top-level None arms. A generic alias
+must include that arm explicitly, as `Annotated[T | None, metadata]`; metadata
+on a bare T is not deferred until later specialisation. Keeping Row first in the
+Users return annotation preserves existing configured-row specialisation.
+
+Behavioural coverage lives in the semantic
+[`permissive_optional.md`](../crates/ty_python_semantic/resources/mdtest/extensions/permissive_optional.md),
+native completion/inlay tests and
+[`permissive-optional.test.mjs`](browser/tests/permissive-optional.test.mjs).
+
+## Browser API extensions
 
 Generic WASM API extensions expose existing engine behaviour:
 

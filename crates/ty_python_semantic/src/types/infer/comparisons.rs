@@ -842,6 +842,18 @@ fn infer_binary_type_comparison_inner<'db>(
     let db = context.db();
     let env = &context.program_environment();
 
+    let (left, right) = if matches!(
+        op,
+        NonIdentityOperator::Rich(RichCompareOperator::Eq | RichCompareOperator::Ne)
+    ) {
+        (left, right)
+    } else {
+        (
+            left.without_permissive_none(db, env),
+            right.without_permissive_none(db, env),
+        )
+    };
+
     let try_dunder = |policy: MemberLookupPolicy| {
         let rich_comparison = |op| infer_rich_comparison(context, left, right, op, policy);
         let membership_test_comparison = |op, range: TextRange| {

@@ -2543,6 +2543,50 @@ impl<'db> Type<'db> {
         self.is_instance_of(db, KnownClass::NoneType)
     }
 
+    pub(crate) const fn is_permissive_none(&self) -> bool {
+        matches!(self, Type::Dynamic(DynamicType::PermissiveNone))
+    }
+
+    /// Expose the existing bounded gradual algebra for relations and set operations.
+    /// Keep the marker elsewhere so ordinary operations and explicit None checks retain its policy.
+    pub(crate) fn expand_permissive_none(
+        self,
+        db: &'db dyn Db,
+        env: &ProgramEnvironment<'db>,
+    ) -> Self {
+        if self.is_permissive_none() {
+            IntersectionType::from_two_elements(db, env, Type::any(), Type::none(db, env))
+        } else {
+            self
+        }
+    }
+
+    /// Ignore a possible permissive None without making operation results gradual.
+    /// A bare marker is not ignored: a definitely absent value is still None.
+    pub(crate) fn without_permissive_none(
+        self,
+        db: &'db dyn Db,
+        env: &ProgramEnvironment<'db>,
+    ) -> Self {
+        if self.is_permissive_none() {
+            return Type::none(db, env);
+        }
+        if let Type::Union(union) = self
+            && union.elements(db).iter().any(|ty| ty.is_permissive_none())
+        {
+            return UnionType::from_elements(
+                db,
+                env,
+                union
+                    .elements(db)
+                    .iter()
+                    .copied()
+                    .filter(|ty| !ty.is_permissive_none()),
+            );
+        }
+        self
+    }
+
     fn is_bool(&self, db: &'db dyn Db) -> bool {
         self.is_instance_of(db, KnownClass::Bool)
     }
@@ -2568,6 +2612,7 @@ impl<'db> Type<'db> {
     fn is_todo(&self) -> bool {
         self.as_dynamic().is_some_and(|dynamic| match dynamic {
             DynamicType::Any
+            | DynamicType::PermissiveNone
             | DynamicType::Unknown
             | DynamicType::InvalidConcatenateUnknown
             | DynamicType::UnknownGeneric(_)
@@ -2780,10 +2825,7 @@ impl<'db> Type<'db> {
         materialization_kind: MaterializationKind,
     ) -> Type<'db> {
         match self {
-            Type::Dynamic(_) => match materialization_kind {
-                MaterializationKind::Top => Type::object(),
-                MaterializationKind::Bottom => Type::Never,
-            },
+            Type::Dynamic(dynamic) => dynamic.materialization(db, env, materialization_kind),
             Type::Divergent(divergent) => {
                 Type::Divergent(divergent.materialized(materialization_kind))
             }
@@ -3250,6 +3292,9 @@ impl<'db> Type<'db> {
 
     #[must_use]
     fn negate(&self, db: &'db dyn Db, env: &ProgramEnvironment<'db>) -> Type<'db> {
+        if self.is_permissive_none() {
+            return self.expand_permissive_none(db, env).negate(db, env);
+        }
         // Avoid invoking the `IntersectionBuilder` for negations that are trivial.
         //
         // We verify that this always produces the same result as
@@ -3429,7 +3474,7 @@ impl<'db> Type<'db> {
             Type::ProtocolInstance(protocol) => protocol.class_origin(db).is_some(),
 
             Type::Dynamic(dynamic) => match dynamic {
-                DynamicType::Any => true,
+                DynamicType::Any | DynamicType::PermissiveNone => true,
                 DynamicType::Unknown
                 | DynamicType::UnknownGeneric(_)
                 | DynamicType::UnspecializedTypeVar
@@ -5928,6 +5973,12 @@ impl<'db> Type<'db> {
                     .member_lookup_with_policy_and_receiver(db, env, name_str, policy, receiver);
             }
 
+            let operation_type = this.without_permissive_none(db, env);
+            if operation_type != this {
+                return operation_type
+                    .member_lookup_with_policy_and_receiver(db, env, name_str, policy, receiver);
+            }
+
             match this {
                 Type::Recursive(recursive) => recursive
                     .unfold(db, env)
@@ -6833,6 +6884,11 @@ impl<'db> Type<'db> {
     ) -> Bindings<'db> {
         if let Some(fallback) = self.materialized_divergent_fallback() {
             return fallback.bindings_with_receiver(db, env, recursion_guard, receiver);
+        }
+
+        let operation_type = self.without_permissive_none(db, env);
+        if operation_type != self {
+            return operation_type.bindings_with_receiver(db, env, recursion_guard, receiver);
         }
 
         match self {
@@ -9827,7 +9883,7 @@ impl<'db> Type<'db> {
                 }
             },
 
-            Type::Dynamic(_) => match type_mapping {
+            Type::Dynamic(dynamic) => match type_mapping {
                 TypeMapping::ApplySpecialization(_)
                 | TypeMapping::ApplySpecializationWithMaterialization { .. }
                 | TypeMapping::ApplyRecursiveSubstitution(_)
@@ -9839,10 +9895,7 @@ impl<'db> Type<'db> {
                 | TypeMapping::ReplaceParameterDefaults
                 | TypeMapping::EagerExpansion
                 | TypeMapping::RescopeReturnCallables(_) => self,
-                TypeMapping::Materialize(materialization_kind) => match materialization_kind {
-                    MaterializationKind::Top => Type::object(),
-                    MaterializationKind::Bottom => Type::Never,
-                },
+                TypeMapping::Materialize(kind) => dynamic.materialization(db, visitor.env, *kind),
             },
             // `Divergent` is an internal cycle marker rather than a gradual type like `Any` or
             // `Unknown`. Preserve the marker across materialization, while recording whether this
@@ -10521,7 +10574,9 @@ impl<'db> Type<'db> {
 
             // These types have no definition
             Self::Dynamic(
-                DynamicType::InvalidConcatenateUnknown | DynamicType::UnspecializedTypeVar,
+                DynamicType::PermissiveNone
+                | DynamicType::InvalidConcatenateUnknown
+                | DynamicType::UnspecializedTypeVar,
             )
             | Self::Callable(_)
             | Self::TypeIs(_)
@@ -11398,6 +11453,8 @@ impl DivergentType {
 
 #[derive(Copy, Clone, Debug, Eq, Hash, PartialEq, get_size2::GetSize, salsa::SalsaValue)]
 pub enum DynamicType<'db> {
+    /// A gradual None whose upper bound is None and lower bound is Never.
+    PermissiveNone,
     /// An explicitly annotated `typing.Any`
     Any,
     /// An unannotated value, or a dynamic type resulting from an error
@@ -11438,7 +11495,20 @@ pub enum DynamicType<'db> {
     Todo(TodoType),
 }
 
-impl DynamicType<'_> {
+impl<'db> DynamicType<'db> {
+    fn materialization(
+        self,
+        db: &'db dyn Db,
+        env: &ProgramEnvironment<'db>,
+        kind: MaterializationKind,
+    ) -> Type<'db> {
+        match kind {
+            MaterializationKind::Top if matches!(self, Self::PermissiveNone) => Type::none(db, env),
+            MaterializationKind::Top => Type::object(),
+            MaterializationKind::Bottom => Type::Never,
+        }
+    }
+
     fn recursive_type_normalized(self) -> Self {
         self
     }
@@ -11459,6 +11529,7 @@ impl std::fmt::Display for DynamicType<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             DynamicType::Any => f.write_str("Any"),
+            DynamicType::PermissiveNone => f.write_str("PermissiveNone"),
             DynamicType::Unknown
             | DynamicType::UnknownGeneric(_)
             | DynamicType::UnknownLambdaParameter

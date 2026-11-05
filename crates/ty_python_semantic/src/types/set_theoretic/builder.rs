@@ -1590,6 +1590,7 @@ impl<'db> IntersectionBuilder<'db> {
             }
             _ => ty,
         };
+        let ty = ty.expand_permissive_none(db, &self.env);
         match ty {
             Type::TypeAlias(_) | Type::Recursive(_) => {
                 self.add_negative_impl::<L>(ty, seen_aliases)?;

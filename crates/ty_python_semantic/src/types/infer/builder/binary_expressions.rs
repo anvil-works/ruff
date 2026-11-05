@@ -472,6 +472,8 @@ impl<'db> TypeInferenceBuilder<'db, '_> {
     ) -> Option<Type<'db>> {
         let env = self.program_environment();
         let db = self.db();
+        let left_ty = left_ty.without_permissive_none(db, env);
+        let right_ty = right_ty.without_permissive_none(db, env);
 
         // Check for division by zero; this doesn't change the inferred type for the expression, but
         // may emit a diagnostic
@@ -577,8 +579,11 @@ impl<'db> TypeInferenceBuilder<'db, '_> {
             (any @ Type::Dynamic(DynamicType::Any), _, _)
             | (_, any @ Type::Dynamic(DynamicType::Any), _) => Some(any),
 
-            (unknown @ Type::Dynamic(DynamicType::Unknown), _, _)
-            | (_, unknown @ Type::Dynamic(DynamicType::Unknown), _) => Some(unknown),
+            // PermissiveNone is normalised above but still requires an exhaustive match arm.
+            (unknown @ Type::Dynamic(DynamicType::Unknown | DynamicType::PermissiveNone), _, _)
+            | (_, unknown @ Type::Dynamic(DynamicType::Unknown | DynamicType::PermissiveNone), _) => {
+                Some(unknown)
+            }
 
             (unknown @ Type::Dynamic(DynamicType::InvalidConcatenateUnknown), _, _)
             | (_, unknown @ Type::Dynamic(DynamicType::InvalidConcatenateUnknown), _) => {

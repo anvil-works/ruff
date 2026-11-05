@@ -243,6 +243,10 @@ impl<'db> Type<'db> {
         env: &ProgramEnvironment<'db>,
         mode: EvaluationMode,
     ) -> Result<Cow<'db, TupleSpec<'db>>, IterationError<'db>> {
+        let operation_type = self.without_permissive_none(db, env);
+        if operation_type != self {
+            return operation_type.try_iterate_with_mode(db, env, mode);
+        }
         fn non_async_special_case<'db>(
             db: &'db dyn Db,
             env: &ProgramEnvironment<'db>,

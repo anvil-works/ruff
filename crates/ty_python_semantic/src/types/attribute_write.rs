@@ -341,6 +341,7 @@ pub(super) fn attribute_write_requirement<'db>(
     attribute: &str,
     receiver: Option<Type<'db>>,
 ) -> AttributeWriteRequirement<'db> {
+    let object_ty = object_ty.without_permissive_none(db, env);
     match object_ty {
         Type::RecursiveVar(_) => {
             unreachable!("semantic operation on an unbound recursive variable")

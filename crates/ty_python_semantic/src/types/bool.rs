@@ -230,6 +230,8 @@ impl<'db> Type<'db> {
                 Truthiness::AlwaysTrue
             }
 
+            ty if ty.is_permissive_none() => Truthiness::AlwaysFalse,
+
             Type::Dynamic(_)
             | Type::Divergent(_)
             | Type::Callable(_)

@@ -70,7 +70,8 @@ impl<'db> ClassBase<'db> {
             ClassBase::Class(class) => class.name(db),
             ClassBase::Dynamic(DynamicType::Any) => "Any",
             ClassBase::Dynamic(
-                DynamicType::Unknown
+                DynamicType::PermissiveNone
+                | DynamicType::Unknown
                 | DynamicType::UnknownGeneric(_)
                 | DynamicType::UnknownLambdaParameter
                 | DynamicType::InvalidConcatenateUnknown

@@ -1753,7 +1753,10 @@ impl<'db, 'ast> TypeInferenceBuilder<'db, 'ast> {
         };
 
         // Aliases must use the same union and TypedDict checks as their underlying types.
-        match object_ty.resolve_type_alias(db) {
+        match object_ty
+            .resolve_type_alias(db)
+            .without_permissive_none(db, env)
+        {
             Type::Union(union) => {
                 let mut infer_slice_ty = MultiInferenceGuard::new(infer_slice_ty);
                 let mut infer_rhs_value = MultiInferenceGuard::new(infer_rhs_value);
@@ -2178,6 +2181,7 @@ impl<'db, 'ast> TypeInferenceBuilder<'db, 'ast> {
     ) {
         let env = self.program_environment();
         let db = self.db();
+        let object_ty = object_ty.without_permissive_none(db, env);
 
         let attach_original_type_info = |diagnostic: &mut LintDiagnosticGuard| {
             if let Some(full_object_ty) = full_object_ty {
@@ -2431,14 +2435,48 @@ impl<'db, 'ast> TypeInferenceBuilder<'db, 'ast> {
             .context
             .inference_flags
             .replace(InferenceFlags::IN_TYPE_ALIAS, false);
+        let mut permissive_optional = false;
         for metadata_element in &arguments[1..] {
-            self.infer_expression(metadata_element, TypeContext::default());
+            let metadata = self.infer_expression(metadata_element, TypeContext::default());
+            permissive_optional |= metadata
+                .as_string_literal()
+                .is_some_and(|literal| literal.value(self.db()) == "anvil:permissive-optional");
         }
         self.context
             .inference_flags
             .set(InferenceFlags::IN_TYPE_ALIAS, previous_in_type_alias);
 
-        subscript_context.infer(self, first_argument)
+        let annotated = subscript_context.infer(self, first_argument);
+        if !permissive_optional {
+            return annotated;
+        }
+
+        annotated.map_type(|ty| {
+            let Type::KnownInstance(KnownInstanceType::Annotated(inner)) = ty else {
+                return ty;
+            };
+            let db = self.db();
+            let env = self.program_environment();
+            let inner = inner.inner(db).expand_top_level_aliases(db, env);
+            // Only the annotated value's None arm is permissive. Optional fields
+            // and container elements retain their own annotations.
+            let mark_none = |ty: Type<'db>| {
+                if ty.is_none(db) {
+                    Type::Dynamic(DynamicType::PermissiveNone)
+                } else {
+                    ty
+                }
+            };
+            let inner = match inner {
+                Type::Union(union) => UnionType::from_elements(
+                    db,
+                    env,
+                    union.elements(db).iter().copied().map(mark_none),
+                ),
+                ty => mark_none(ty),
+            };
+            Type::KnownInstance(KnownInstanceType::Annotated(InternedType::new(db, inner)))
+        })
     }
 }
 

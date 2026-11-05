@@ -599,7 +599,8 @@ impl<'db> Type<'db> {
         }
 
         match (self, target) {
-            (Type::Never | Type::Dynamic(_), _) | (_, Type::Dynamic(_)) => true,
+            (Type::Never | Type::Dynamic(_), _) => true,
+            (_, Type::Dynamic(_)) if !target.is_permissive_none() => true,
             (_, Type::NominalInstance(target)) if target.is_object() => true,
             (_, Type::Union(union)) => {
                 self.materialized_divergent_fallback().is_none()
@@ -1785,6 +1786,10 @@ impl<'a, 'c, 'db> TypeRelationChecker<'a, 'c, 'db> {
         source: Type<'db>,
         target: Type<'db>,
     ) -> ConstraintSet<'db, 'c> {
+        // Use existing gradual-type relations: the unknown part is bounded by None,
+        // rather than allowing unrelated values as Any would.
+        let source = source.expand_permissive_none(db, self.env);
+        let target = target.expand_permissive_none(db, self.env);
         // Reflexivity and lazy constraints can bypass the RecursiveVar match arm below.
         source.assert_not_recursive_var();
         target.assert_not_recursive_var();
@@ -3477,6 +3482,16 @@ impl<'a, 'c, 'db> DisjointnessChecker<'a, 'c, 'db> {
         left: Type<'db>,
         right: Type<'db>,
     ) -> ConstraintSet<'db, 'c> {
+        let left = if left.is_permissive_none() {
+            Type::none(db, self.env)
+        } else {
+            left
+        };
+        let right = if right.is_permissive_none() {
+            Type::none(db, self.env)
+        } else {
+            right
+        };
         /// This lets us clearly mark below which match arms require a non-trivial amount of work
         /// to calculate, without sacrificing match guard exhaustiveness checks. If we are not
         /// performing expensive checks, then we will conservatively report that the two types are

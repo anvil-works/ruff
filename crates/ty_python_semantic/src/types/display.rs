@@ -33,11 +33,11 @@ use crate::types::type_alias::QualifiedTypeAliasName;
 use crate::types::typevar::BoundTypeVarIdentity;
 use crate::types::visitor::TypeVisitor;
 use crate::types::{
-    CallableType, IntersectionType, KnownBoundMethodType, KnownClass, KnownInstanceType,
-    KnownUnion, LiteralValueType, LiteralValueTypeKind, MaterializationKind, PropertyInstanceClass,
-    PropertyInstanceType, Protocol, SpecialFormType, SubclassOfInner, SubclassOfType, Type,
-    TypeAliasType, TypeGuardLike, TypedDictType, TypingModule, UnionType, WrapperDescriptorKind,
-    visitor,
+    CallableType, DynamicType, IntersectionType, KnownBoundMethodType, KnownClass,
+    KnownInstanceType, KnownUnion, LiteralValueType, LiteralValueTypeKind, MaterializationKind,
+    PropertyInstanceClass, PropertyInstanceType, Protocol, SpecialFormType, SubclassOfInner,
+    SubclassOfType, Type, TypeAliasType, TypeGuardLike, TypedDictType, TypingModule, UnionType,
+    WrapperDescriptorKind, visitor,
 };
 use ty_python_core::ProgramFile;
 use ty_python_core::definition::Definition;
@@ -157,6 +157,8 @@ pub struct DisplaySettings<'db> {
     /// Whether to hide the return type of the outermost signature.
     /// Return types of nested callable types inside parameters are still shown.
     hide_return_type: bool,
+    /// Preserve type policies when producing an annotation to insert into Python source.
+    for_type_annotation: bool,
 }
 
 impl<'db> DisplaySettings<'db> {
@@ -769,6 +771,13 @@ pub struct DisplayType<'env, 'db> {
 }
 
 impl<'db> DisplayType<'_, 'db> {
+    /// Preserve metadata that concise type labels omit, so generated annotations retain it.
+    #[must_use]
+    pub fn for_type_annotation(mut self) -> Self {
+        self.settings.for_type_annotation = true;
+        self
+    }
+
     /// Allows this type display to span multiple lines while preserving inferred qualification.
     #[must_use]
     pub fn multiline(self) -> Self {
@@ -1168,6 +1177,15 @@ impl<'db> FmtDetailed<'db> for DisplayRepresentation<'_, 'db> {
     fn fmt_detailed(&self, f: &mut TypeWriter<'_, '_, 'db>) -> fmt::Result {
         let db = self.db;
         match self.ty {
+            Type::Dynamic(DynamicType::PermissiveNone) => {
+                if self.settings.for_type_annotation {
+                    f.with_type(Type::SpecialForm(SpecialFormType::Annotated))
+                        .write_str("Annotated")?;
+                    f.write_str("[None, \"anvil:permissive-optional\"]")
+                } else {
+                    f.with_type(Type::none(db, self.env)).write_str("None")
+                }
+            }
             Type::Dynamic(dynamic) => {
                 if dynamic.is_todo() {
                     f.set_invalid_type_annotation();

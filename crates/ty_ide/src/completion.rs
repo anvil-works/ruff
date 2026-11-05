@@ -3512,6 +3512,54 @@ mod tests {
     use super::{CompletionKind, CompletionSettings, token_suffix_by_kinds};
 
     #[test]
+    fn permissive_optional_members() {
+        let declarations = "\
+from typing import Annotated, Literal
+
+class Record:
+    nickname: str | None
+    def __getitem__(self, key: Literal['name']) -> str: ...
+    def update(self, *, name: str | None = None) -> None: ...
+
+def read() -> Annotated[Record | None, 'anvil:permissive-optional']: ...
+";
+
+        for (source, expected) in [
+            (
+                "from records import read\nvalue = read()\nvalue.<CURSOR>",
+                "update",
+            ),
+            (
+                "from records import read\nvalue = read()\nvalue['name'].<CURSOR>",
+                "upper",
+            ),
+        ] {
+            CursorTest::builder()
+                .source("records.pyi", declarations)
+                .source("main.py", source)
+                .completion_test_builder()
+                .skip_keywords()
+                .skip_builtins()
+                .skip_auto_import()
+                .build()
+                .contains(expected);
+        }
+
+        CursorTest::builder()
+            .source("records.pyi", declarations)
+            .source(
+                "main.py",
+                "from records import read\nvalue = read()\nif value is None:\n    value.<CURSOR>",
+            )
+            .completion_test_builder()
+            .skip_keywords()
+            .skip_builtins()
+            .skip_auto_import()
+            .build()
+            .not_contains("update");
+    }
+
+    #[test]
     fn token_suffixes_match() {
         insta::assert_debug_snapshot!(
             token_suffix_by_kinds(&tokenize("foo.x"), [TokenKind::Newline]),

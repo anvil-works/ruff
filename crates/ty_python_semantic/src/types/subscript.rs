@@ -572,7 +572,7 @@ impl<'db> Type<'db> {
             return self.subscript(db, env, fallback, expr_context);
         }
 
-        let value_ty = self;
+        let value_ty = self.without_permissive_none(db, env);
 
         let inferred = match (value_ty, slice_ty) {
             (Type::RecursiveVar(_), _) | (_, Type::RecursiveVar(_)) => {

@@ -16,6 +16,7 @@ use crate::types::special_form::TypeQualifier;
 use crate::types::tuple::{TupleElement, TupleLength, TupleSpec, TupleSpecBuilder, TupleType};
 use crate::types::typed_dict::{TypedDictFieldBuilder, TypedDictSchema, TypedDictType};
 use crate::types::unpacker::collected_list_type;
+use crate::types::visitor::any_over_type;
 use crate::types::{
     CallableType, ClassBase, ClassLiteral, ClassPatternPositionalSource, ClassType, CycleDetector,
     IntersectionBuilder, IntersectionType, KnownClass, KnownInstanceType, LiteralValueTypeKind,
@@ -823,7 +824,8 @@ impl<'db> Conjunctions<'db> {
         }
 
         // Collapse shared union arms before distributing the next constraint over them.
-        self.conjuncts
+        let narrowed = self
+            .conjuncts
             .into_iter()
             .fold(Type::object(), |accumulated, conjunct| match conjunct {
                 NarrowingOperation::Intersection(ty) => {
@@ -832,7 +834,26 @@ impl<'db> Conjunctions<'db> {
                 NarrowingOperation::GenericFiltering(ty) => {
                     filter_generic_narrowing_constraint(db, env, accumulated, ty)
                 }
-            })
+            });
+        materialize_proven_none(db, env, narrowed)
+    }
+}
+
+/// Remove the optional-use policy once flow narrowing proves the value is None.
+/// Generic bounds may retain an intersection rather than the bare marker.
+fn materialize_proven_none<'db>(
+    db: &'db dyn Db,
+    env: &ProgramEnvironment<'db>,
+    narrowed: Type<'db>,
+) -> Type<'db> {
+    if narrowed.is_permissive_none()
+        || (matches!(narrowed, Type::Intersection(_))
+            && narrowed.is_subtype_of(db, env, Type::none(db, env))
+            && any_over_type(db, env, narrowed, true, |ty| ty.is_permissive_none()))
+    {
+        Type::none(db, env)
+    } else {
+        narrowed
     }
 }
 
@@ -3457,10 +3478,11 @@ impl<'db, 'pattern> PatternSuccessAnalyzer<'db, 'pattern> {
 
     fn intersect_types(&self, left: Type<'db>, right: Type<'db>) -> Type<'db> {
         let db = self.db;
-        IntersectionBuilder::new(db, &self.env)
+        let narrowed = IntersectionBuilder::new(db, &self.env)
             .add_positive(left)
             .add_positive(right)
-            .build()
+            .build();
+        materialize_proven_none(db, &self.env, narrowed)
     }
 
     fn places(&self) -> &'db PlaceTable {

@@ -12,7 +12,7 @@ use ty_python_semantic::importer::{ImportAction, ImportRequest, Importer, Member
 use ty_python_semantic::types::ide_support::{
     inlay_hint_call_argument_details, inlay_hint_return_type,
 };
-use ty_python_semantic::types::{Type, TypeDetail, TypeDisplayDetails};
+use ty_python_semantic::types::{SpecialFormType, Type, TypeDetail, TypeDisplayDetails};
 use ty_python_semantic::{HasType, SemanticModel};
 
 #[derive(Debug, Clone)]
@@ -36,17 +36,18 @@ impl InlayHint {
         let position = expr.range().end();
         let env = ProgramEnvironment::from_file(file);
         // Render the type to a string, and get subspans for all the types that make it up
-        let details = ty.display(db, &env).to_string_parts();
+        let details = ty.display(db, &env).for_type_annotation().to_string_parts();
 
         // Filter out repetitive hints like `x: T = T()`
         if call_matches_name(rhs, &details.label) {
             return None;
         }
 
-        Some(Self::type_annotation(
+        Some(Self::type_annotation_with_metadata(
             context,
             expr.into(),
             position,
+            ty,
             &details,
             ": ",
             allow_edits,
@@ -197,6 +198,40 @@ impl InlayHint {
         }
     }
 
+    // Most annotations already have the right label. Reuse upstream's span/import
+    // handling for the uncommon metadata case instead of maintaining a second walker.
+    fn type_annotation_with_metadata<'db>(
+        context: InlayHintImportContext<'_, 'db>,
+        scope_node: AnyNodeRef<'_>,
+        position: TextSize,
+        ty: Type<'db>,
+        details: &TypeDisplayDetails<'db>,
+        prefix: &str,
+        allow_edits: bool,
+    ) -> Self {
+        let mut hint =
+            Self::type_annotation(context, scope_node, position, details, prefix, allow_edits);
+        if details.details.iter().any(|detail| {
+            matches!(
+                detail,
+                TypeDetail::Type(Type::SpecialForm(SpecialFormType::Annotated))
+            )
+        }) {
+            let env = ProgramEnvironment::from_file(context.file);
+            let display_details = ty.display(context.db, &env).to_string_parts();
+            hint.label = Self::type_annotation(
+                context,
+                scope_node,
+                position,
+                &display_details,
+                prefix,
+                false,
+            )
+            .label;
+        }
+        hint
+    }
+
     fn call_argument_name(
         position: TextSize,
         name: &str,
@@ -221,11 +256,15 @@ impl InlayHint {
         ty: Type<'db>,
     ) -> Self {
         let env = ProgramEnvironment::from_file(context.file);
-        let details = ty.display(context.db, &env).to_string_parts();
-        Self::type_annotation(
+        let details = ty
+            .display(context.db, &env)
+            .for_type_annotation()
+            .to_string_parts();
+        Self::type_annotation_with_metadata(
             context,
             function.into(),
             function.parameters.end(),
+            ty,
             &details,
             " -> ",
             true,
@@ -1266,6 +1305,24 @@ mod tests {
         5 |     return make()
           |
         ");
+    }
+
+    #[test]
+    fn permissive_optional_annotations_are_portable() {
+        let mut test =
+            return_type_hint_test("from library import read\n\ndef relay():\n    return read()\n");
+        test.with_extra_file(
+            "library.pyi",
+            "from typing import Annotated\ndef read() -> str | Annotated[None, 'anvil:permissive-optional']: ...\n",
+        );
+        let rendered = test.inlay_hints();
+        assert!(rendered.contains("def relay()[ -> str | None]:"));
+        assert!(
+            rendered
+                .contains("def relay() -> str | Annotated[None, \"anvil:permissive-optional\"]")
+        );
+        assert!(rendered.contains("from typing import Annotated"));
+        assert!(!rendered.contains("PermissiveNone"));
     }
 
     struct InlayHintTest {

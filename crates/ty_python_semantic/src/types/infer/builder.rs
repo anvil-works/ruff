@@ -11539,6 +11539,11 @@ impl<'db, 'ast> TypeInferenceBuilder<'db, 'ast> {
     ) -> Type<'db> {
         let db = self.db();
         let env = self.program_environment();
+        let operand_type = if op == ast::UnaryOp::Not {
+            operand_type
+        } else {
+            operand_type.without_permissive_none(db, env)
+        };
         let fallback_unary_expression_type = || {
             let unary_dunder_method = match op {
                 ast::UnaryOp::Invert => "__invert__",
