@@ -13,11 +13,11 @@ finished after the checker exists on npm.
 
 The browser package has its own version in `anvil/browser/package.json`. A
 browser-only release does not require new native checker or Python-stub packages.
-The browser-only candidate is `0.1.0-canary.13`. It includes Form name
-navigation and removes incidental wildcard re-exports from auto-import
-suggestions. It uses `@anvil-works/python-stubs@0.1.0-canary.2` for optional
-pytest typing. Verify the published typing pack and check that the new browser
-version is available before publication.
+Browser `0.1.0-canary.14` avoids redoing Form item inference when a server
+completion or diagnostics query cannot use it. It uses
+`@anvil-works/python-stubs@0.1.0-canary.2` for optional pytest typing. Verify the
+published typing pack and check that the new browser version is available
+before publication.
 
 Publish from the main checkout on `anvil`. Land reviewed changes on that branch
 before preparing a release; do not publish from a feature branch or linked
@@ -32,8 +32,8 @@ worktree. The release commit must also be on `origin/anvil` before npm publicati
     through the installed-package browser smoke before publishing it.
 1. Before npm publication, fast-forward push `anvil` and verify that `origin/anvil`
     names the release's exact source commit. Run Anvil's **Python
-    completion performance** workflow on the IDE feature branch, setting
-    `ty_ref` to that full source SHA. This compares the candidate with the IDE's
+    completion performance** workflow with `ty_ref` set to that full source SHA.
+    This compares the candidate with the IDE's
     installed release on the same Linux runner. Require its compatibility and
     performance checks to pass with unchanged budgets.
 1. Stu publishes the reviewed archive with
