@@ -28,11 +28,12 @@ use ty_python_semantic::{
     types::{CycleDetector, KnownClass, Type},
 };
 
+use crate::all_symbols::completion_symbols;
 use crate::annotation_expression::is_in_annotation_expression;
 use crate::docstring::Docstring;
 use crate::goto::Definitions;
 use crate::symbols::QueryPattern;
-use crate::{Db, all_symbols, signature_help};
+use crate::{Db, signature_help};
 
 pub fn completion<'db>(
     db: &'db dyn Db,
@@ -41,7 +42,7 @@ pub fn completion<'db>(
     file: ProgramFile<'db>,
     offset: TextSize,
 ) -> Vec<Completion<'db>> {
-    completion_with_receiver(db, settings, capabilities, file, offset, None)
+    completion_with_receiver(db, settings, capabilities, file, offset, None, false)
 }
 
 /// Adds qualified members of a visible binding to ordinary name completions.
@@ -52,6 +53,7 @@ pub fn completion_with_receiver<'db>(
     file: ProgramFile<'db>,
     offset: TextSize,
     receiver: Option<&str>,
+    exclude_implicit_wildcard_reexports: bool,
 ) -> Vec<Completion<'db>> {
     let program_file = file;
     let parsed = parsed_module(db, file.python_file(db)).load(db);
@@ -157,6 +159,7 @@ pub fn completion_with_receiver<'db>(
                         |module_name: &ModuleName, symbol: &str| {
                             ImportRequest::import_from(module_name.as_str(), symbol)
                         },
+                        exclude_implicit_wildcard_reexports,
                         &mut completions,
                     );
                 }
@@ -2348,6 +2351,7 @@ pub(crate) fn unresolved_fixes<'db>(
         |module_name: &ModuleName, symbol: &str| {
             ImportRequest::import_from(module_name.as_str(), symbol).force()
         },
+        false,
         &mut completions,
     );
     results.extend(completions.into_imports());
@@ -2362,6 +2366,7 @@ pub(crate) fn unresolved_fixes<'db>(
         |module_name: &ModuleName, symbol: &str| {
             ImportRequest::import(module_name.as_str(), symbol).force()
         },
+        false,
         &mut completions,
     );
     results.extend(completions.into_qualifications(node.range()));
@@ -2479,6 +2484,7 @@ fn add_unimported_completions<'db>(
     parsed: &ParsedModuleRef,
     scoped: ScopedTarget<'_>,
     create_import_request: impl for<'a> Fn(&'a ModuleName, &'a str) -> ImportRequest<'a>,
+    exclude_implicit_wildcard_reexports: bool,
     completions: &mut Completions<'db>,
 ) {
     // This is redundant since `all_symbols` will also bail
@@ -2494,7 +2500,12 @@ fn add_unimported_completions<'db>(
     let members = importer.members_in_scope_at(scoped.node, scoped.node.start());
     let importing_file = ImportingFile::File(source_file, file.resolver_environment(db));
 
-    for symbol in all_symbols(db, file, &completions.query.pattern) {
+    for symbol in completion_symbols(
+        db,
+        file,
+        &completions.query.pattern,
+        exclude_implicit_wildcard_reexports,
+    ) {
         if symbol.file() == source_file || symbol.module().is_known(db, KnownModule::Builtins) {
             continue;
         }

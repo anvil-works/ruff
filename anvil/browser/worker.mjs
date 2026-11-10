@@ -2268,7 +2268,7 @@ function request(method, params) {
         if (params.context?.autoImport === 'only' && !completionIndexes.get(workspace)?.complete)
             return { isIncomplete: true, preparationRequired: true, items: [] };
         const native = workspace.completions(completionHandle, queryPosition(completionHandle, params.position),
-            params.context?.autoImport !== false, params.context?.autoImport === 'only' ? undefined : 'self');
+            params.context?.autoImport !== false, params.context?.autoImport === 'only' ? undefined : 'self', true);
         const completionSource = workspace.sourceText(completionHandle);
         const beforeCursor = completionSource.split('\n')[position.line].slice(0, position.character);
         const fromImport = JSON.parse(clientRuntime.importFacts(completionSource)).fromImports.findLast(imported =>

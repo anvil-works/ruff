@@ -49,6 +49,11 @@ Generic WASM API extensions expose existing engine behaviour:
     a callback reference without `()`, including for ordinary Python APIs.
 - `Workspace.completions` accepts an optional `auto_import` boolean. It selects
     the existing completion setting; omitting it retains upstream auto-imports.
+- An optional fifth argument excludes wildcard re-exports in first-party
+    Python source without a resolvable `__all__` from auto-import suggestions.
+    Ty traces these bindings when merging re-exports, but excludes them from
+    the suggested destinations. A local binding after a wildcard import is
+    indexed as the local binding. The browser adapter opts in.
 - An optional fourth `receiver` argument adds qualified members of a visible
     binding to ordinary bare-name completions. For example, `receiver="self"` matches
     `self.name_box` for `name`, `name_box`, `sel` or an empty prefix. The query uses

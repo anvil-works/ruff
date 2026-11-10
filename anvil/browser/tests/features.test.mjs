@@ -8,6 +8,40 @@ const files = {
     '/app/client_code/helpers.py':'class Rocket: pass\n',
 };
 
+test('auto-imports exclude incidental wildcard re-exports from app files', () => withBrowser(async page => {
+    const result = await page.evaluate(async files => {
+        const { BrowserAnalysisSession } = await import('/session.mjs');
+        const uri = 'file:///app/client_code/main.py';
+        const session = new BrowserAnalysisSession({ rootUri: 'file:///app', files: {
+            ...files,
+            '/app/client_code/Home/__init__.py': 'from ._anvil_designer import HomeTemplate\nfrom anvil import *\nclass Home(HomeTemplate): pass\n',
+            '/app/client_code/Home/form_template.yaml': 'class_name: Home\ncontainer: {type: ColumnPanel}\ncomponents: []\n',
+            '/app/client_code/api.py': 'from anvil import *\n__all__ = ["open_form"]\n',
+            '/app/client_code/other.py': 'from anvil import *\ndef open_form(): pass\n',
+            '/app/client_code/alias.py': 'from anvil import *\nfrom anvil import open_form as open_form\n',
+            '/app/client_code/widgets/__init__.py': 'from .bridge import Widget\n__all__ = ["Widget"]\n',
+            '/app/client_code/widgets/bridge.py': 'from .implementation import *\n',
+            '/app/client_code/widgets/implementation.py': 'class Widget: pass\n',
+            [new URL(uri).pathname]: 'open_for',
+        } });
+        try {
+            const candidates = async (line, prefix, name) => (await session.query('textDocument/completion', {
+                textDocument: { uri }, position: { line, character: prefix.length },
+            })).result.items.filter(item => item.label === name);
+            const imports = (await candidates(0, 'open_for', 'open_form')).map(item => item.labelDetails?.description).sort();
+            await session.changeDocument(uri, 'from anvil import *\nopen_for');
+            const inScope = (await candidates(1, 'open_for', 'open_form')).some(item => !item.additionalTextEdits?.length);
+            await session.changeDocument(uri, 'Widge');
+            const facade = (await candidates(0, 'Widge', 'Widget')).map(item => [item.labelDetails?.description, item.kind]);
+            await session.updateFiles({ '/app/client_code/widgets/__init__.py': 'from .bridge import *\n' });
+            const withoutFacade = (await candidates(0, 'Widge', 'Widget')).map(item => item.labelDetails?.description);
+            return { imports, inScope, facade, withoutFacade };
+        } finally { session.dispose(); }
+    }, files);
+    assert.deepEqual(result, { imports: ['Main.alias', 'Main.api', 'Main.other', 'anvil'], inScope: true,
+        facade: [['Main.widgets', 7]], withoutFacade: ['Main.widgets.implementation'] });
+}));
+
 test('go to type definition follows the inferred class into its original source', () => withBrowser(async page=>{
     const result=await page.evaluate(async files=>{
         const {BrowserAnalysisSession}=await import('/session.mjs');

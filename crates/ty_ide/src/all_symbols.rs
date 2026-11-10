@@ -20,6 +20,15 @@ pub fn all_symbols<'db>(
     importing_from: ProgramFile<'db>,
     query: &QueryPattern,
 ) -> Vec<AllSymbolInfo<'db>> {
+    completion_symbols(db, importing_from, query, false)
+}
+
+pub(crate) fn completion_symbols<'db>(
+    db: &'db dyn Db,
+    importing_from: ProgramFile<'db>,
+    query: &QueryPattern,
+    exclude_implicit_wildcard_reexports: bool,
+) -> Vec<AllSymbolInfo<'db>> {
     // If the query is empty, return immediately to avoid expensive file scanning
     if query.will_match_everything() {
         return Vec::new();
@@ -56,7 +65,17 @@ pub fn all_symbols<'db>(
             if query.is_match_symbol_name(module.name(db)) {
                 symbols.push(AllSymbolInfo::from_module(db, module, file));
             }
-            for (_, symbol) in symbols_for_file_global_only(db, program_file).search(query) {
+            let globals = symbols_for_file_global_only(db, program_file);
+            let exclude_wildcards = exclude_implicit_wildcard_reexports
+                && !is_non_first_party
+                && !file.is_stub(db)
+                && !globals.has_valid_all();
+            for (_, symbol) in globals.search(query) {
+                let hidden_reexport = exclude_wildcards
+                    && symbol
+                        .imported_from
+                        .as_ref()
+                        .is_some_and(ImportedFrom::is_wildcard);
                 // Test functions (starting with `test_`) in third-party
                 // packages are almost never useful to import.
                 if is_non_first_party && symbol.name.starts_with("test_") {
@@ -67,6 +86,7 @@ pub fn all_symbols<'db>(
                     symbol.to_owned(),
                     module,
                     file,
+                    hidden_reexport,
                 ));
             }
             symbols
@@ -74,7 +94,11 @@ pub fn all_symbols<'db>(
         .flat_map_iter(|symbols| symbols)
         .collect();
 
-    merge::merge(db, results)
+    let mut results = merge::merge(db, results);
+    if exclude_implicit_wildcard_reexports {
+        results.retain(|symbol| !symbol.hidden_reexport);
+    }
+    results
 }
 
 /// Prepares one batch of the same cached symbols used by auto-import searches.
@@ -128,6 +152,8 @@ pub struct AllSymbolInfo<'db> {
     /// This `File` is guaranteed to be the same
     /// as the `File` underlying `module`.
     file: File,
+    /// A wildcard binding used to trace a re-export chain but never suggested.
+    hidden_reexport: bool,
 }
 
 impl<'db> AllSymbolInfo<'db> {
@@ -136,6 +162,7 @@ impl<'db> AllSymbolInfo<'db> {
         symbol: SymbolInfo<'static>,
         module: Module<'db>,
         file: File,
+        hidden_reexport: bool,
     ) -> AllSymbolInfo<'db> {
         let qualified = compact_str::format_compact!(
             "{module_name}.{name}",
@@ -147,6 +174,7 @@ impl<'db> AllSymbolInfo<'db> {
             qualified,
             module,
             file,
+            hidden_reexport,
         }
     }
 
@@ -157,6 +185,7 @@ impl<'db> AllSymbolInfo<'db> {
             qualified: module.name(db).as_str().into(),
             module,
             file,
+            hidden_reexport: false,
         }
     }
 
@@ -448,7 +477,7 @@ mod merge {
                     // with a greater length, so we specifically don't
                     // consider re-exports that cross a module boundary.
                     let reexport_module_name = reexport.module().name(db);
-                    if top != reexport_module_name.first_component() {
+                    if reexport.hidden_reexport || top != reexport_module_name.first_component() {
                         continue;
                     }
                     let len = reexport_module_name.components().count();

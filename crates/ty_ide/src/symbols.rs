@@ -121,9 +121,14 @@ pub struct FlatSymbols {
     /// This is `None` if the module has no `__all__` at module
     /// scope.
     all_names: Option<FxHashSet<Name>>,
+    has_valid_all: bool,
 }
 
 impl FlatSymbols {
+    pub(crate) fn has_valid_all(&self) -> bool {
+        self.has_valid_all
+    }
+
     /// Get the symbol info for the symbol identified by the given ID.
     ///
     /// Returns `None` when the given ID does not reference a symbol in this
@@ -441,6 +446,10 @@ pub struct ImportedFrom {
 }
 
 impl ImportedFrom {
+    pub(crate) fn is_wildcard(&self) -> bool {
+        self.kind == ImportKind::Wildcard
+    }
+
     fn import(alias: &ast::Alias, kind: ImportKind) -> Option<ImportedFrom> {
         let module_name = ModuleName::new(&alias.name)?;
         Some(ImportedFrom { module_name, kind })
@@ -785,22 +794,33 @@ impl<'db> SymbolVisitor<'db> {
         // true, since in that case, none of the symbols have a parent
         // ID by construction.
         let mut remap = IndexVec::with_capacity(self.symbols.len());
-        let mut seen = self.exports_only.then(FxHashSet::default);
-        let mut new = IndexVec::with_capacity(self.symbols.len());
+        let mut seen = self
+            .exports_only
+            .then(FxHashMap::<String, SymbolId>::default);
+        let mut new: IndexVec<SymbolId, SymbolTree> = IndexVec::with_capacity(self.symbols.len());
         for mut symbol in std::mem::take(&mut self.symbols) {
-            // If we're deduplicating and we've already seen
-            // this symbol, then skip it.
-            //
-            // FIXME: We should do this without copying every
-            // symbol name. ---AG
-            if let Some(ref mut seen) = seen {
-                if !seen.insert(symbol.name.clone()) {
-                    continue;
-                }
-            }
             if !self.is_part_of_library_interface(&symbol) {
                 remap.push(None);
                 continue;
+            }
+            // If we're deduplicating and we've already seen
+            // this name, a later concrete binding can replace a wildcard.
+            if let Some(ref mut seen) = seen {
+                if let Some(&id) = seen.get(&symbol.name) {
+                    if new[id]
+                        .imported_from
+                        .as_ref()
+                        .is_some_and(ImportedFrom::is_wildcard)
+                        && !symbol
+                            .imported_from
+                            .as_ref()
+                            .is_some_and(ImportedFrom::is_wildcard)
+                    {
+                        new[id] = symbol;
+                    }
+                    continue;
+                }
+                seen.insert(symbol.name.clone(), new.next_index());
             }
 
             if let Some(ref mut parent) = symbol.parent {
@@ -827,6 +847,7 @@ impl<'db> SymbolVisitor<'db> {
 
         FlatSymbols {
             symbols: new,
+            has_valid_all: self.all_origin.is_some() && !self.all_invalid,
             all_names: self.all_origin.map(|_| {
                 self.all_names.shrink_to_fit();
                 self.all_names

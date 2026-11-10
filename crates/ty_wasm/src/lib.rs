@@ -546,6 +546,7 @@ impl Workspace {
         position: Position,
         auto_import: Option<bool>,
         receiver: Option<String>,
+        exclude_implicit_wildcard_reexports: Option<bool>,
     ) -> Result<Vec<Completion>, Error> {
         let source = source_text(&self.db, file_id.file);
         let index = line_index(&self.db, file_id.file);
@@ -565,6 +566,7 @@ impl Workspace {
             program_file,
             offset,
             receiver.as_deref(),
+            exclude_implicit_wildcard_reexports.unwrap_or(false),
         );
 
         Ok(completions
