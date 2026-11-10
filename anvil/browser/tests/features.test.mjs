@@ -42,6 +42,43 @@ test('auto-imports exclude incidental wildcard re-exports from app files', () =>
         facade: [['Main.widgets', 7]], withoutFacade: ['Main.widgets.implementation'] });
 }));
 
+test('definition resolves Form name arguments to the Form class', () => withBrowser(async page => {
+    const results = await page.evaluate(async files => {
+        const { BrowserAnalysisSession } = await import('/session.mjs');
+        const client = 'file:///app/client_code/main.py';
+        const server = 'file:///app/server_code/report.py';
+        const dependency = 'file:///app/.anvil/deps/LIB/client_code/launcher.py';
+        const libraryForm = '/app/.anvil/deps/LIB/client_code/Home';
+        const session = new BrowserAnalysisSession({ rootUri: 'file:///app', files: {
+            ...files,
+            '/app/anvil.yaml': 'package_name: Main\ndependencies: [{dep_id: widgets, resolution_hints: {app_id: LIB}}]\n',
+            '/app/.anvil/deps/LIB/anvil.yaml': 'package_name: Widgets\n',
+            [libraryForm + '.py']: 'class Home: pass\n',
+            [libraryForm + '.yaml']: 'class_name: Home\ncontainer: {type: ColumnPanel}\ncomponents: []\n',
+            [new URL(dependency).pathname]: 'from anvil import open_form\nopen_form("Home")\nopen_form("Widgets.Home")\nopen_form("widgets:Home")\n',
+            '/app/client_code/Home/__init__.py': 'from ._anvil_designer import HomeTemplate\nclass Home(HomeTemplate): pass\n',
+            '/app/client_code/Home/form_template.yaml': 'class_name: Home\ncontainer: {type: ColumnPanel}\ncomponents: []\n',
+            [new URL(client).pathname]: 'from anvil import open_form as show\nshow("Home")\nshow("Missing")\nprint("Home")\n',
+            [new URL(server).pathname]: 'from anvil.pdf import render_form\nrender_form(form_name="Home")\n',
+        } });
+        try {
+            const definition = async (uri, line, character) => (await session.query('textDocument/definition', {
+                textDocument: { uri }, position: { line, character },
+            })).result;
+            return await Promise.all([
+                definition(client, 1, 7), definition(server, 1, 24),
+                definition(client, 2, 7), definition(client, 3, 8),
+                definition(dependency, 1, 13), definition(dependency, 2, 16), definition(dependency, 3, 16),
+            ]);
+        } finally { session.dispose(); }
+    }, files);
+    const home = { uri: 'file:///app/client_code/Home/__init__.py',
+        range: { start: { line: 1, character: 6 }, end: { line: 1, character: 10 } } };
+    const libraryHome = { uri: 'file:///app/.anvil/deps/LIB/client_code/Home.py',
+        range: { start: { line: 0, character: 6 }, end: { line: 0, character: 10 } } };
+    assert.deepEqual(results, [[home], [home], [], [], [home], [libraryHome], []]);
+}));
+
 test('go to type definition follows the inferred class into its original source', () => withBrowser(async page=>{
     const result=await page.evaluate(async files=>{
         const {BrowserAnalysisSession}=await import('/session.mjs');

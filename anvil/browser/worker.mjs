@@ -1253,6 +1253,28 @@ function owningApp(handle) {
         handle.path().startsWith(`${base}/${config.package_name ?? 'main_app_package'}/`))?.[0] ?? root;
 }
 
+const formNameParameters = { open_form: 'form', render_form: 'form_name', load_form: 'form_name', FormResponse: 'form_name' };
+
+function formDefinition(handle, position) {
+    const before = (a, b) => a.line < b.line || a.line === b.line && a.character <= b.character;
+    for (const call of callsFor(workspace.sourceText(handle)).arguments) {
+        const argument = call.values.find(value => value.literal &&
+            value.literal.range.start.line === value.literal.range.end.line &&
+            before(value.literal.range.start, position) && before(position, value.literal.range.end));
+        if (!argument) continue;
+        const parameter = formNameParameters[apiFunction(handle, call.position)];
+        if (!parameter || argument.index !== 0 && argument.keyword !== parameter) continue;
+        // Calls resolve unqualified names from the running app. The legacy
+        // dependency-ID syntax only applies to Designer properties.
+        if (argument.literal.value.includes(':')) return;
+        const form = formPropertyTarget(argument.literal.value, { root }, formCatalogue, dependencyRoots);
+        if (!form) return;
+        const name = formClasses.get(pathForUri(form.uri));
+        const declaration = sourceFacts(sourceText(form.uri)).classes.find(cls => cls.owner === null && cls.name === name);
+        if (declaration) return { uri: form.uri, range: declaration.range };
+    }
+}
+
 // Ty owns constructor signatures, including inherited methods and imported
 // types. In an analysis copy only, call the actual Form class in place of
 // open_form and blank its name argument. Padding preserves UTF-16 columns;
@@ -1314,7 +1336,7 @@ function namedArgumentCompletions(handle, position, calls) {
     if (!invocation) return;
     const api = apiFunction(handle, invocation.position);
     const parameters = { get_secret: 'secret_name', encrypt_with_key: 'key_name', decrypt_with_key: 'key_name',
-        open_form: 'form', render_form: 'form_name', load_form: 'form_name', FormResponse: 'form_name', call: null, call_s: null, launch_background_task: null,
+        ...formNameParameters, call: null, call_s: null, launch_background_task: null,
         ...Object.fromEntries(eventMethods.map(name => [name, 'event_name'])) };
     if (!Object.hasOwn(parameters, api)) return;
     const parameter = parameters[api];
@@ -1331,7 +1353,7 @@ function namedArgumentCompletions(handle, position, calls) {
         const kind = api === 'get_secret' ? 'secret' : 'key';
         names = Object.values(appConfigs).flatMap(config => Object.entries(config.secrets ?? {})
             .filter(([, secret]) => secret.type === kind).map(([name]) => name));
-    } else if (['open_form', 'render_form', 'load_form', 'FormResponse'].includes(api)) {
+    } else if (Object.hasOwn(formNameParameters, api)) {
         const owner = owningApp(handle);
         names = formCatalogue.map(form => form.root === owner ? form.name : `${form.config.package_name}.${form.name}`);
     } else {
@@ -2240,7 +2262,11 @@ function request(method, params) {
         if (remote) return remote.map(({ uri, range }) => ({ uri, range }));
         selectEnvironment(params.textDocument.uri);
         const target = fileHandle(params.textDocument.uri);
-        return locations(workspace.gotoDefinition(target, queryPosition(target, params.position)));
+        const definitions = locations(workspace.gotoDefinition(target, queryPosition(target, params.position)));
+        if (definitions.length) return definitions;
+        const position = sourceMaps.get(target.path())?.position(params.position) ?? params.position;
+        const form = formDefinition(target, position);
+        return form ? [form] : [];
     }
     if (method === 'textDocument/completion') {
         const position = sourceMaps.get(path)?.position(params.position) ?? params.position;
