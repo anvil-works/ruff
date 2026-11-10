@@ -627,6 +627,10 @@ function stringArgument(decorator, name, index) {
     return (Object.hasOwn(decorator.keywords, name) ? decorator.keywords[name] : decorator.args[index]) ?? undefined;
 }
 
+function rpcRegistrationCandidates(source) {
+    return sourceFacts(source).functions.filter(fn => fn.owner === null && fn.decorators.length);
+}
+
 function registrations() {
     if (remoteRegistrations) return remoteRegistrations;
     const originalEnvironment = isServer;
@@ -634,19 +638,20 @@ function registrations() {
     try {
         prepareApp(true);
         const context = renameContext();
-        result.entries = [];
+        const entries = [];
         registrationInputs = new Set();
         for (const [path, source] of context.files) {
             if (!path.endsWith('.py') || !path.includes('/server_code/')) continue;
             let plan = registrationPlans.get(path);
             if (!plan) {
+                if (!rpcRegistrationCandidates(source).length) continue;
                 plan = { entries: callableRegistrations({ ...context, files: new Map([[path, source]]) }), inputs: sourceInputs([path]) };
                 registrationPlans.set(path, plan);
             }
-            result.entries.push(...plan.entries);
+            entries.push(...plan.entries);
             for (const input of plan.inputs) registrationInputs.add(input);
         }
-        for (const item of result.entries)
+        for (const item of entries)
             result[item.kind === 'callable' ? 'callables' : 'tasks'].push({ name: item.name, filePath: pathForUri(item.uri) });
         for (const [group, field] of [['callables', 'duplicateCallables'], ['tasks', 'duplicateTasks']]) {
             const seen = new Set();
@@ -656,6 +661,8 @@ function registrations() {
                 return duplicate ? [item.name] : [];
             }))];
         }
+        result.inferable = entries.filter(entry =>
+            !(entry.kind === 'callable' ? result.duplicateCallables : result.duplicateTasks).includes(entry.name));
     } finally { prepareApp(originalEnvironment); }
     return remoteRegistrations = result;
 }
@@ -711,8 +718,8 @@ function withTemporarySources(run) {
 function ensureFormItems() {
     if (inferredFormItems) return;
     const result = { annotations: {}, declarations: [] };
-    const producers = [...sourceEnvironments].filter(([path, server]) => !server && path.endsWith('.py') && assignmentsFor(path).length);
-    if (!producers.length) {
+    const producers = formItemProducers();
+    if (!producers.size) {
         formInputs = new Set();
         inferredFormItems = result;
         return;
@@ -724,18 +731,13 @@ function ensureFormItems() {
         const forms = context.forms;
         const formDeclarations = new Map(forms.map(form => [form.uri,
             sourceFacts(context.source(form.uri)).classes.find(cls => cls.owner === null && cls.name === formClasses.get(pathForUri(form.uri)))]));
-        const producerPaths = new Set();
         const probes = [];
-        for (const [original] of projections) {
-            if (!original.endsWith('.py') || sourceEnvironments.get(original) !== false) continue;
+        for (const [original, assignments] of producers) {
+            if (!projections.has(original)) continue;
             const uri = uriForPath(original);
-            const form = forms.find(form => form.uri === uri);
-            const panels = form ? components(form.data).filter(component => ['RepeatingPanel', 'anvil.RepeatingPanel'].includes(component.type)) : [];
             const source = context.source(uri);
-            const assignments = assignmentsFor(original);
-            if (assignments.length) producerPaths.add(original);
             for (const assignment of assignments) {
-                let template;
+                let template = assignment.template;
                 if (assignment.target.constructorPosition) {
                     const targets = context.definitions(uri, assignment.target.constructorPosition);
                     if (targets.length !== 1) continue;
@@ -745,12 +747,8 @@ function ensureFormItems() {
                             declaration.start.character === targets[0].range.start.character;
                     });
                 } else {
-                    const panel = panels.find(panel => panel.name === assignment.target.component);
-                    if (!panel) continue;
-                    template = formPropertyTarget(panel.properties?.item_template, form, forms, dependencyRoots);
-                    if (!template) continue;
                     // Resolve the real Form member before instrumenting sources.
-                    const members = context.member(uri, panel.name);
+                    const members = context.member(uri, assignment.target.component);
                     if (!context.definitions(uri, assignment.target.position).some(target =>
                         members.some(member => member.uri === target.uri && JSON.stringify(member.range) === JSON.stringify(target.range)))) continue;
                 }
@@ -761,7 +759,7 @@ function ensureFormItems() {
                     iterable: !assignment.target.constructorPosition });
             }
         }
-        formInputs = sourceInputs([...producerPaths, ...probes.map(probe => pathForUri(probe.targetFormUri))]);
+        formInputs = sourceInputs([...producers.keys(), ...probes.map(probe => pathForUri(probe.targetFormUri))]);
         if (!probes.length) { inferredFormItems = result; return; }
         const base = JSON.parse(preparedRootsJson)[0];
         const ownerModule = uri => projections.get(pathForUri(uri)).slice(base.length + 1).replace(/(?:\/__init__)?\.py$/, '').replaceAll('/', '.');
@@ -947,20 +945,20 @@ function checkRpcTypes(entries) {
     }
 }
 
+function missingRpcTypes(entries, needed) {
+    return entries.filter(entry => (!needed || needed.has(JSON.stringify([entry.kind, entry.name]))) &&
+        !remoteTypes.some(type => type.kind === entry.kind && type.name === entry.name));
+}
+
 function ensureRemoteTypes(needed) {
     remoteTypes ??= [];
     if (needed?.size === 0) return;
-    if (remoteRegistrations && remoteRegistrations.entries.every(entry =>
-        remoteRegistrations.entries.filter(other => other.kind === entry.kind && other.name === entry.name).length !== 1 ||
-        needed && !needed.has(JSON.stringify([entry.kind, entry.name])) ||
-        remoteTypes.some(type => type.kind === entry.kind && type.name === entry.name))) return;
+    let missing = remoteRegistrations && missingRpcTypes(remoteRegistrations.inferable, needed);
+    if (missing?.length === 0) return;
     const originalEnvironment = isServer;
     try {
         prepareApp(true);
-        const entries = registrations().entries;
-        const missing = entries.filter(entry => (!needed || needed.has(JSON.stringify([entry.kind, entry.name]))) &&
-            !remoteTypes.some(type => type.kind === entry.kind && type.name === entry.name) &&
-            entries.filter(other => other.kind === entry.kind && other.name === entry.name).length === 1);
+        missing ??= missingRpcTypes(registrations().inferable, needed);
         if (!missing.length) return;
         const inferred = [];
         const base = JSON.parse(preparedRootsJson)[0];
@@ -991,7 +989,7 @@ function ensureRpcContracts(calls) {
     const entries = [...new Set(calls.map(call => call.entry))].filter(entry => entry.contract === undefined);
     if (!entries.length) return;
     const environment = isServer;
-    const registrationsByName = registrations().entries;
+    const registrationsByName = registrations().inferable;
     try {
         prepareApp(true);
         const base = JSON.parse(preparedRootsJson)[0];
@@ -1637,7 +1635,7 @@ function renameContext() {
     return {
         root, dependencyRoots, files: selectedFiles, forms: formCatalogue, configs: appConfigs,
         invalidForms: preparationDiagnostics.filter(item => item.code === 'invalid-form-template'),
-        source: sourceText,
+        source: sourceText, rpcRegistrationCandidates,
         definitions(uri, position) {
             selectEnvironment(uri);
             const handle = fileHandle(uri);
@@ -1665,7 +1663,7 @@ function renameContext() {
 
 // Record whole-module import inputs for derived Anvil types. Ty resolves imports,
 // including aliases/re-exports and server overrides; no parallel Python resolver.
-function sourceInputs(paths) {
+function sourceInputs(paths, visit) {
     const inputs = new Set();
     const visited = new Set();
     const pending = [...paths];
@@ -1677,6 +1675,7 @@ function sourceInputs(paths) {
         if (packForPath(canonical)) continue;
         if (visited.has(canonical) || !handles.has(canonical)) continue;
         visited.add(canonical);
+        visit?.(canonical);
         const original = origins.get(canonical) ?? path;
         if (files.has(original) || overlays.has(original)) inputs.add(original);
         let imports = resolvedImports.get(canonical);
@@ -1741,15 +1740,30 @@ function pruneSourceFacts() {
         for (const source of cache.keys()) if (!active.has(source)) cache.delete(source);
 }
 
+const directDynamicCall = /\banvil\.server\.(?:call|call_s|launch_background_task)\s*\(\s*[^'"\s)]/;
+
+function prioritizeDynamicRpcCalls(source, calls) {
+    if (!directDynamicCall.test(source)) return calls;
+    const lines = source.split(/\r\n?|\n/);
+    const likely = [];
+    const remaining = [];
+    for (const call of calls) {
+        const { line, character } = call.callee.start;
+        const match = lines[line]?.slice(character).match(directDynamicCall);
+        (match?.index === 0 ? likely : remaining).push(call);
+    }
+    return [...likely, ...remaining];
+}
+
 function rpcUses(path) {
     const key = JSON.stringify([isServer, path]);
     let consumer = rpcConsumers.get(key);
     if (consumer) return consumer;
     const handle = fileHandle(uriForPath(path));
-    const needed = new Set();
-    let dynamic = false;
-    const calls = callsFor(workspace.sourceText(handle)).arguments;
-    for (const call of calls) {
+    let needed = new Set();
+    const source = workspace.sourceText(handle);
+    const calls = callsFor(source).arguments;
+    for (const call of prioritizeDynamicRpcCalls(source, calls)) {
         if (!call.values.length) continue;
         // Attribute calls locate the member after the callee starts. They cannot
         // pass the bare-name proof, but still need ordinary API resolution.
@@ -1761,10 +1775,13 @@ function rpcUses(path) {
         if (!kind) continue;
         const keyword = kind === 'background_task' ? 'task_name' : 'fn_name';
         const argument = call.values.find(value => value.index === 0 || value.keyword === keyword);
-        if (!argument?.literal) dynamic = true;
-        else needed.add(JSON.stringify([kind, argument.literal.value]));
+        if (!argument?.literal) {
+            needed = undefined;
+            break;
+        }
+        needed.add(JSON.stringify([kind, argument.literal.value]));
     }
-    consumer = { inputs: calls.length ? sourceInputs([path]) : new Set([path]), needed, dynamic };
+    consumer = { inputs: calls.length ? sourceInputs([path]) : new Set([path]), needed };
     // Generated editing contexts change independently of project file updates.
     if (projections.has(path)) rpcConsumers.set(key, consumer);
     return consumer;
@@ -1780,30 +1797,77 @@ function assignmentsFor(path) {
     return entry.assignments;
 }
 
-// Literal names need only their own inferred return. Dynamic calls retain all
-// overloads. Refactoring explicitly requests the complete project separately.
-function neededRpcTypes(uri) {
-    if (!uri.startsWith('file:')) return new Set();
+function formItemAssignments(path) {
+    const assignments = assignmentsFor(path);
+    if (!assignments.length) return assignments;
+    const uri = uriForPath(path);
+    const form = formCatalogue.find(form => form.uri === uri);
+    const panels = form ? components(form.data).filter(component =>
+        ['RepeatingPanel', 'anvil.RepeatingPanel'].includes(component.type)) : [];
+    // An ordinary .items assignment only supplies Form items if the Designer
+    // declares that member as a RepeatingPanel with a resolvable template.
+    return assignments.flatMap(assignment => {
+        if (assignment.target.constructorPosition) return [assignment];
+        const panel = panels.find(panel => panel.name === assignment.target.component);
+        const template = panel && formPropertyTarget(panel.properties?.item_template, form, formCatalogue, dependencyRoots);
+        return template ? [{ ...assignment, template }] : [];
+    });
+}
+
+function formItemProducers() {
+    const producers = new Map();
+    for (const [path, server] of sourceEnvironments) {
+        if (server || !path.endsWith('.py')) continue;
+        const assignments = formItemAssignments(path);
+        if (assignments.length) producers.set(path, assignments);
+    }
+    return producers;
+}
+
+// `needed` is a set of registrations to infer, or undefined for a dynamic call
+// that may use any registration. An empty set needs no more RPC inference.
+// `prepareFormItems` controls whether the query can defer client item inference.
+function rpcPreparation(uri, deferUnreferencedFormItems) {
     const needed = new Set();
-    const collect = paths => {
-        for (const path of new Set([...paths, ...sourceInputs(paths)])) {
+    // Each unambiguous registration has at most one inferred return type.
+    if (!uri.startsWith('file:') || remoteRegistrations && remoteTypes?.length === remoteRegistrations.inferable.length)
+        return { needed, prepareFormItems: true };
+    const collect = (paths, inputs = sourceInputs(paths)) => {
+        const likely = [];
+        const remaining = [];
+        for (const path of new Set([...paths, ...inputs])) {
+            const source = overlays.get(path) ?? files.get(path);
+            (source && directDynamicCall.test(source) ? likely : remaining).push(path);
+        }
+        // A dynamic call makes every result type necessary. Check likely
+        // callers first, then resolve aliases and other callers as usual.
+        for (const path of [...likely, ...remaining]) {
             if (!handles.has(projections.get(path) ?? path)) continue;
             const consumer = rpcUses(path);
-            if (consumer.dynamic) return false;
+            if (!consumer.needed) return false;
             for (const name of consumer.needed) needed.add(name);
         }
         return true;
     };
-    if (!collect([pathForUri(uri)])) return;
+    const paths = [pathForUri(uri)];
+    let usesDesigner = false;
+    const inputs = sourceInputs(paths, deferUnreferencedFormItems ? path => {
+        usesDesigner ||= path.endsWith('/_anvil_designer.pyi');
+    } : undefined);
+    if (!collect(paths, inputs)) return { needed: undefined, prepareFormItems: true };
+    // A server query with no Form or RPC in its import graph can leave
+    // Form item types for a later request that uses them.
+    if (deferUnreferencedFormItems && !needed.size && !usesDesigner && ![...inputs].some(path => formClasses.has(path)))
+        return { needed, prepareFormItems: false };
     if (!inferredFormItems) {
-        const producers = [...sourceEnvironments].filter(([path, server]) => !server && path.endsWith('.py') && assignmentsFor(path).length).map(([path]) => path);
+        const producers = [...formItemProducers().keys()];
         const environment = isServer;
         try {
             if (producers.length && isServer) prepareApp(false);
-            if (!collect(producers)) return;
+            if (!collect(producers)) return { needed: undefined, prepareFormItems: true };
         } finally { if (isServer !== environment) prepareApp(environment); }
     }
-    return needed;
+    return { needed, prepareFormItems: true };
 }
 
 function mountSource(original, source) {
@@ -1878,11 +1942,15 @@ function invalidateSources(before) {
     const affected = inputs => inputs && [...changed].some(path => inputs.has(path));
     for (const [key, consumer] of rpcConsumers) if (affected(consumer.inputs)) rpcConsumers.delete(key);
     for (const [path, plan] of registrationPlans) if (affected(plan.inputs)) registrationPlans.delete(path);
-    if (affected(registrationInputs)) {
+    // An undecorated module can leave the registry alone until it gains a
+    // candidate. It can still be an input to another module's registration.
+    const registrationsChanged = remoteRegistrations && (affected(registrationInputs) || [...changed].some(path =>
+        path.includes('/server_code/') && rpcRegistrationCandidates(current.get(path)).length));
+    if (registrationsChanged) {
         remoteRegistrations = undefined;
         registrationInputs = undefined;
     }
-    if (affected(remoteInputs)) {
+    if (registrationsChanged || affected(remoteInputs)) {
         remoteTypes = undefined;
         remoteInputs = undefined;
         if (formInputs?.size) {
@@ -1890,7 +1958,7 @@ function invalidateSources(before) {
             formInputs = undefined;
         }
     }
-    if (affected(formInputs) || [...changed].some(path => sourceEnvironments.get(path) === false && assignmentsFor(path).length)) {
+    if (affected(formInputs) || [...changed].some(path => sourceEnvironments.get(path) === false && formItemAssignments(path).length)) {
         inferredFormItems = undefined;
         formInputs = undefined;
     }
@@ -2032,18 +2100,31 @@ function request(method, params) {
         }
         return { complete: index.complete };
     }
+    const uri = params.textDocument.uri;
+    const sourcePath = uri.startsWith('file:') ? pathForUri(uri) : undefined;
     const completeProject = ['textDocument/references', 'textDocument/rename'].includes(method);
-    // A returned client class may itself call another RPC. Follow newly exposed
-    // imports until no additional return declarations are needed for this query.
-    for (;;) {
-        const count = remoteTypes?.length ?? 0;
-        ensureRemoteTypes(completeProject ? undefined : neededRpcTypes(params.textDocument.uri));
-        if (completeProject || remoteTypes.length === count) break;
+    const ordinaryCompletion = method === 'textDocument/completion' && params.context?.autoImport === false;
+    // Keep server tests on the existing path: pytest resolves fixtures outside explicit imports.
+    const deferUnreferencedFormItems = (ordinaryCompletion || method === 'textDocument/diagnostic') && isServer &&
+        projections.has(sourcePath) && sourceEnvironments.get(sourcePath) === true;
+    let prepareItemsForQuery = true;
+    if (completeProject) {
+        ensureRemoteTypes();
+    } else {
+        // A returned client class may itself call another RPC. Follow newly
+        // exposed imports until this query needs no more return declarations.
+        for (;;) {
+            const count = remoteTypes?.length ?? 0;
+            const { needed, prepareFormItems } = rpcPreparation(uri, deferUnreferencedFormItems);
+            ensureRemoteTypes(needed);
+            prepareItemsForQuery = prepareFormItems;
+            if (remoteTypes.length === count) break;
+        }
     }
-    ensureFormItems();
-    ensureHandlerTypes(completeProject ? undefined : (params.textDocument.uri.startsWith('file:') ? sourceInputs([pathForUri(params.textDocument.uri)]) : new Set()));
-    selectEnvironment(params.textDocument.uri);
-    const handle = fileHandle(params.textDocument.uri);
+    if (prepareItemsForQuery) ensureFormItems();
+    ensureHandlerTypes(completeProject ? undefined : (sourcePath ? sourceInputs([sourcePath]) : new Set()));
+    selectEnvironment(uri);
+    const handle = fileHandle(uri);
     const path = handle.path();
     if (method === 'textDocument/typeDefinition') {
         return locations(workspace.gotoTypeDefinition(handle, queryPosition(handle, params.position)));

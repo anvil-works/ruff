@@ -345,10 +345,11 @@ export function callableRegistrations(context) {
     const result = [];
     for (const [path, source] of context.files) {
         if (!path.endsWith('.py') || !path.includes('/server_code/')) continue;
+        const candidates = context.rpcRegistrationCandidates(source);
+        if (!candidates.length) continue;
         const uri = new URL(path, 'file:///').href;
         const calls = JSON.parse(apiCalls(source));
-        for (const fn of JSON.parse(itemFacts(source)).functions) {
-            if (fn.owner !== null) continue;
+        for (const fn of candidates) {
             for (const decorator of fn.decorators) {
                 const kind = context.api(uri, decorator.position);
                 if (kind !== 'callable' && kind !== 'background_task') continue;

@@ -580,13 +580,17 @@ test('RPC results follow inferred server return types and unsaved source changes
         })).result.items.map(item => item.label);
         try {
             const before = await complete();
-            await session.openDocument('file:///app/server_code/api.py', server('42'));
+            const uri = 'file:///app/server_code/api.py';
+            await session.openDocument(uri, 'def greet(): return "Ada"\n');
+            const unregistered = await complete();
+            await session.changeDocument(uri, server('42'));
             const after = await complete();
-            await session.closeDocument('file:///app/server_code/api.py');
-            return { before, after, restored: await complete() };
+            await session.closeDocument(uri);
+            return { before, unregistered, after, restored: await complete() };
         } finally { session.dispose(); }
     });
     assert(result.before.includes('upper'), JSON.stringify(result.before));
+    assert(!result.unregistered.includes('upper'));
     assert(result.after.includes('bit_length'), JSON.stringify(result.after));
     assert(!result.after.includes('upper'));
     assert(result.restored.includes('upper'), JSON.stringify(result.restored));
@@ -854,24 +858,46 @@ test('Form item inference preserves ordinary Python mapping operations and keeps
 test('RPC-populated Form items use current server return types for panels and direct construction', () => withBrowser(async page => {
     const result = await page.evaluate(async () => {
         const { BrowserAnalysisSession } = await import('/session.mjs');
-        const server = value => `from anvil.server import callable\n@callable\ndef people(): return ${value}\n`;
-        const uri = 'file:///app/client_code/RowTemplate/__init__.py';
+        const server = value => `from anvil.server import callable\n@callable\ndef people(): return ${value}\n@callable\ndef unrelated(): pass\n`;
+        const uri = 'file:///app/client_code/RowTemplate.py';
+        const home = '/app/client_code/Home/__init__.py';
+        const homeSource = component => `from ._anvil_designer import HomeTemplate\nfrom anvil.server import call\nclass Home(HomeTemplate):\n    def __init__(self):\n        self.${component}.items = call("people")\n`;
         const session = new BrowserAnalysisSession({ workerUrl: '/worker.mjs', rootUri: 'file:///app', files: {
             '/app/anvil.yaml': 'package_name: Main\n',
             '/app/server_code/api.py': server('["Ada"]'),
-            '/app/client_code/Home/__init__.py': 'from ._anvil_designer import HomeTemplate\nfrom anvil.server import call\nclass Home(HomeTemplate):\n    def __init__(self):\n        self.rows.items = call("people")\n',
+            '/app/server_code/inspect_template.py': 'from Main._anvil_designer import RowTemplateTemplate\nrow = RowTemplateTemplate()\nrow.item.\n',
+            '/app/server_code/inspect_row.py': 'from Main.RowTemplate import RowTemplate\nrow = RowTemplate()\nwrong: int = row.item\nrow.item.\n',
+            [home]: homeSource('picker'),
             '/app/client_code/Home/form_template.yaml': JSON.stringify({ class_name: 'Home', container: { type: 'ColumnPanel' },
-                components: [{ name: 'rows', type: 'RepeatingPanel', properties: { item_template: 'RowTemplate' } }] }),
-            '/app/client_code/RowTemplate/__init__.py': 'from ._anvil_designer import RowTemplateTemplate\nclass RowTemplate(RowTemplateTemplate):\n    def probe(self):\n        self.item.\n',
-            '/app/client_code/RowTemplate/form_template.yaml': JSON.stringify({ class_name: 'RowTemplate', container: { type: 'ColumnPanel' }, components: [] }),
+                components: [
+                    { name: 'picker', type: 'DropDown' },
+                    { name: 'rows', type: 'RepeatingPanel', properties: { item_template: 'RowTemplate' } },
+                ] }),
+            '/app/client_code/RowTemplate.py': 'from ._anvil_designer import RowTemplateTemplate\nclass RowTemplate(RowTemplateTemplate):\n    def probe(self):\n        self.item.\n',
+            '/app/client_code/RowTemplate.yaml': JSON.stringify({ class_name: 'RowTemplate', container: { type: 'ColumnPanel' }, components: [] }),
         } });
         const complete = async () => (await session.query('textDocument/completion', { textDocument: { uri }, position: { line: 3, character: 18 } })).result.items.map(item => item.label);
+        const completeFromServer = async (module, line) => (await session.query('textDocument/completion', {
+            textDocument: { uri: `file:///app/server_code/${module}.py` },
+            position: { line, character: 9 }, context: { autoImport: false },
+        })).result.items.map(item => item.label);
         try {
+            const dropdown = await complete();
+            await session.openDocument(`file://${home}`, homeSource('rows'));
+            const fromDesigner = await completeFromServer('inspect_template', 2);
+            await session.closeDocument(`file://${home}`);
+            await session.openDocument(`file://${home}`, homeSource('rows'));
+            const diagnostics = (await session.query('textDocument/diagnostic', {
+                textDocument: { uri: 'file:///app/server_code/inspect_row.py' },
+            })).result.items;
+            const fromServer = await completeFromServer('inspect_row', 3);
             const panel = await complete();
             await session.updateFiles({
+                [home]: homeSource('rows'),
                 '/app/client_code/shared.py': 'def people(): return ["Ada"]\n',
                 '/app/server_code/api.py': 'from anvil.server import callable\nfrom Main.shared import people as shared_people\n@callable\ndef people(): return shared_people()\n',
             });
+            await session.closeDocument(`file://${home}`);
             const shared = await complete();
             await session.openDocument('file:///app/client_code/shared.py', 'def people(): return [42]\n');
             const sharedEdit = await complete();
@@ -881,9 +907,14 @@ test('RPC-populated Form items use current server return types for panels and di
                 '/app/server_code/api.py': server('"Ada"') });
             const direct = await complete();
             await session.openDocument('file:///app/server_code/api.py', server('42'));
-            return { panel, shared, sharedEdit, sharedClosed, direct, edited: await complete() };
+            return { dropdown, fromDesigner, fromServer, diagnostics, panel, shared, sharedEdit, sharedClosed, direct, edited: await complete() };
         } finally { session.dispose(); }
     });
+    assert(!result.dropdown.includes('upper'));
+    assert(result.fromDesigner.includes('upper'));
+    assert(result.fromServer.includes('upper'));
+    assert(result.diagnostics.some(item => item.code === 'invalid-assignment' && item.range.start.line === 2),
+        JSON.stringify(result.diagnostics));
     assert(result.panel.includes('upper'));
     assert(result.shared.includes('upper'));
     assert(result.sharedEdit.includes('bit_length') && !result.sharedEdit.includes('upper'));
