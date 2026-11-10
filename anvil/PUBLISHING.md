@@ -13,13 +13,11 @@ finished after the checker exists on npm.
 
 The browser package has its own version in `anvil/browser/package.json`. A
 browser-only release does not require new native checker or Python-stub packages.
-The next browser candidate is `0.1.0-canary.12`; it requires
-`@anvil-works/python-stubs@0.1.0-canary.2` for optional pytest typing. Verify that
-published typing package before resolving the browser lockfile. This release
-also needs native checker `0.1.0-canary.3`, because selective optional typing
-changes shared inference and the bundled Users/Row declarations. The typing pack
-version remains unchanged. Recheck npm before publication: an existing version
-cannot be replaced.
+The browser-only candidate is `0.1.0-canary.13`. It includes Form name
+navigation and removes incidental wildcard re-exports from auto-import
+suggestions. It uses `@anvil-works/python-stubs@0.1.0-canary.2` for optional
+pytest typing. Verify the published typing pack and check that the new browser
+version is available before publication.
 
 Publish from the main checkout on `anvil`. Land reviewed changes on that branch
 before preparing a release; do not publish from a feature branch or linked
