@@ -1083,14 +1083,18 @@ function ensureHandlerTypes(needed) {
 
 // Keep literal escaping and replacement ranges identical for contextual names,
 // events and suggested property values, including raw/concatenated strings.
-function literalCompletions(source, call, position, { names }) {
+function literalCompletions(source, call, position, { names, preferredNames = [] }) {
     const lines = source.split('\n');
     const prefix = call.empty ? '' : lines.slice(call.range.start.line, position.line + 1).map((line, index) =>
         line.slice(index === 0 ? call.range.start.character : 0, call.range.start.line + index === position.line ? position.character : undefined)).join('\n');
     const escaped = label => JSON.stringify(label).slice(1, -1).replaceAll("'", call.quote === "'" ? "\\'" : "'");
-    return { includePython: !!call.empty, items: [...new Set(names)].sort()
+    const preferred = new Set(preferredNames);
+    const orderedNames = new Set([...preferred].sort().concat([...names].sort()));
+    return { includePython: !!call.empty, items: [...orderedNames]
         .filter(label => call.empty || (call.raw ? label : escaped(label)).startsWith(prefix))
-        .map(label => ({ label: call.empty ? JSON.stringify(label) : label, kind: 12, textEdit: {
+        // Quoted completions can return before the merged list gets its sort keys.
+        .map(label => ({ label: call.empty ? JSON.stringify(label) : label,
+            sortText: preferred.size ? `${preferred.has(label) ? '0' : '1'}:${label}` : undefined, kind: 12, textEdit: {
             range: call.empty ? { start: position, end: position } : call.raw ? call.literalRange : call.range,
             newText: call.raw || call.empty ? JSON.stringify(label) : escaped(label),
         } })) };
@@ -1355,7 +1359,10 @@ function namedArgumentCompletions(handle, position, calls) {
             .filter(([, secret]) => secret.type === kind).map(([name]) => name));
     } else if (Object.hasOwn(formNameParameters, api)) {
         const owner = owningApp(handle);
-        names = formCatalogue.map(form => form.root === owner ? form.name : `${form.config.package_name}.${form.name}`);
+        return literalCompletions(source, call, position, {
+            preferredNames: formCatalogue.filter(form => form.root === owner).map(form => form.name),
+            names: formCatalogue.filter(form => form.root !== owner).map(form => `${form.config.package_name}.${form.name}`),
+        });
     } else {
         names = registrations()[api === 'launch_background_task' ? 'tasks' : 'callables'].map(item => item.name);
     }

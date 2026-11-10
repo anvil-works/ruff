@@ -942,7 +942,7 @@ test('Form-name completion follows resolved aliases, selected dependencies and c
             '/app/client_code/main.py': source,
             '/app/client_code/Home/__init__.py': 'from ._anvil_designer import HomeTemplate\nclass Home(HomeTemplate): pass\n',
             '/app/client_code/Home/form_template.yaml': template('Home'),
-            '/app/.anvil/deps/LIB/anvil.yaml': 'package_name: Library\n',
+            '/app/.anvil/deps/LIB/anvil.yaml': 'package_name: Aardvark\n',
             '/app/.anvil/deps/LIB/client_code/Card/__init__.py': 'from ._anvil_designer import CardTemplate\nclass Card(CardTemplate): pass\n',
             '/app/.anvil/deps/LIB/client_code/Card/form_template.yaml': template('Card'),
         };
@@ -965,7 +965,8 @@ test('Form-name completion follows resolved aliases, selected dependencies and c
             return { initial, changed, unrelated };
         } finally { session.dispose(); }
     });
-    assert.deepEqual(result.initial.map(item => item.label).sort(), ['Home', 'Library.Card']);
+    const ranked = result.initial.toSorted((a, b) => (a.sortText ?? a.label).localeCompare(b.sortText ?? b.label));
+    assert.deepEqual(ranked.map(item => item.label), ['Home', 'Aardvark.Card']);
     assert(result.initial.every(item => item.textEdit.range.start.character === 11 && item.textEdit.range.end.character === 11));
     assert.deepEqual(result.changed.map(item => item.label), ['Dashboard']);
     assert(!result.unrelated.some(item => item.label === 'Dashboard'));
