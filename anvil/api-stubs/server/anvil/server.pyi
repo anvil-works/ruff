@@ -5,7 +5,7 @@
 # Type stubs for anvil.server module
 # Generated files: client/anvil/server.pyi, server/anvil/server.pyi
 
-from typing import Any, Callable, TypeVar, overload, Literal, Generic
+from typing import Any, Callable, Iterator, TypeVar, overload, Literal, Generic
 from typing_extensions import ParamSpec, TypeVar as TypeVarWithDefault
 from anvil import Media
 from anvil.tables import Row
@@ -315,17 +315,18 @@ def run_script(script_name: str, /, *args: Any) -> Any:
 request: HttpRequest
 """Contains information about the current HTTP API request. It's an instance of `anvil.server.HttpRequest`."""
 
-# Session handling
-class session:
+class _Session:
     """Server-side session storage.
 
     [Anvil Docs](https://anvil.works/docs/server/sessions-and-cookies)"""
-    @staticmethod
-    def get(key: str, default: Any = None) -> Any: ...
-    @staticmethod
-    def set(key: str, value: Any) -> None: ...
-    @staticmethod
-    def clear() -> None: ...
+    def __getitem__(self, key: str, /) -> Any: ...
+    def __setitem__(self, key: str, value: Any, /) -> None: ...
+    def __delitem__(self, key: str, /) -> None: ...
+    def __iter__(self) -> Iterator[str]: ...
+    def get(self, key: str, default: Any = None) -> Any: ...
+
+session: _Session
+"""A dictionary that contains information about a specific session. It can store anything that a server function can return, except for Media objects."""
 
 # HTTP endpoint decorator
 def http_endpoint(path: str, methods: list[str] | None = None, authenticate_users: bool = False, enable_cors: bool = False, cross_site_session: bool = False) -> Callable[[Callable[_P, _T]], Callable[_P, _T]]:

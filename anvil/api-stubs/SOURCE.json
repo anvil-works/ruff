@@ -1,8 +1,8 @@
 {
   "repository": "https://github.com/anvil-works/anvil",
-  "revision": "6f05b26e94c6b0b7d4029b5f6bafac2b333009a2",
+  "revision": "3a5f23e20b6418ce0feb2f70bd472536965acfd6",
   "files": {
-    "anvil/__init__.pyi": "5c6eda29a17b009cf63938d53a08192df18d76de22b8a5662836de33a9767987",
+    "anvil/__init__.pyi": "7a710fedeb07ac77cea2527a435bb4356bb5d9ec152a64f47fbfb8c44255ab6a",
     "anvil/designer.pyi": "6f1bf4ae07452b7b0d3a92f6ab19b2aa6d0ced7b6c27afdc8a30520a8cf54d52",
     "anvil/email.pyi": "0b67a95ba563085d48e7218f4f5b695e2ebf4c713e6b974154a9b64f7de8f741",
     "anvil/facebook/__init__.pyi": "c0e7dc9c87e7f55c643f6d139d658d846e852039f34d2213a3e097b51efb2a43",
@@ -17,7 +17,7 @@
     "anvil/http.pyi": "fe70f67d400369024c7e4a418eb6a2dc985e0c2b655b1c49f327aead8fa6c351",
     "anvil/image.pyi": "f7adc35dd33c8b6d098caf3cbf5566cf0448c3069f51bac017655fd6752bcf95",
     "anvil/js/__init__.pyi": "b7c7e482d6835693dea5a048ae92bc53415f5e1f07d7175467061e62486b710e",
-    "anvil/js/window/__init__.pyi": "6495f94e506a7927624f4067a355ab87e40fe00e8291ba6040ac8a13c8613cfd",
+    "anvil/js/window/__init__.pyi": "c650219fbe20e94d591a4e2825f59355a4a80772914532f49b86279adb151f11",
     "anvil/media.pyi": "a4776b3838b9466774a9b6c69e8342f86eb4a4a49e4cc84d1c57696e91e4e384",
     "anvil/microsoft/__init__.pyi": "e156f9394ea2878d74f0defb7dc78e047215b280302d8948f016848559a5c364",
     "anvil/microsoft/auth.pyi": "7c0cbea10fcb711d4d67bd390d4b6a373d8536fda97dd9295ec1b68e5266c1f2",
@@ -29,7 +29,7 @@
     "anvil/saml/auth.pyi": "b1421f2b2d8f431062bbf7d754fb117268b72f87bdb24d5ae4df94ae995201f0",
     "anvil/script.pyi": "4c59ea82193a9e5dc5d15a062729be924cc5982d43aad9c541428dd4e8ce18b7",
     "anvil/secrets.pyi": "6f4ac488faa2d8b37222de9d81b02bd01b49915f077f06930f72760d635eca41",
-    "anvil/server.pyi": "20ecbd727ce72f608b8603691de6d754576be4428462d8418b52447ee7e6a68f",
+    "anvil/server.pyi": "c1a9abc9de9ca7916795f9105113751f2383624f5096ee9098c056bde2d9b187",
     "anvil/stripe.pyi": "89d7fb384fc38dd18afe34fc379cea615b3f566b0da588b4089aced47a6960da",
     "anvil/tables/__init__.pyi": "f74c9b360b823a205bc4f48c3cc51bd3936dc99b9c202fd86cf2545f18c74ae2",
     "anvil/tables/query.pyi": "4b3cf938337df1abd3e9569721c9dbbdd2ce7a84224f3f60fe0eb39b37641137",
@@ -43,7 +43,7 @@
     "stripe/checkout.pyi": "483c8216963cd6d8db162cf2e95dc63e65b7032f1d10c3a4a4a469d223178a59"
   },
   "inputs": {
-    "doc/dist/index.json": "0c050ba7e9b91ac3f5ac392550d7970b82afedcb0ab193c250eb81338290d3df",
+    "doc/dist/index.json": "88591515f3a183e387cfaabc1e7f67974391b316d2a75083821c3600a131ab88",
     "doc/anvil-api-stubs/generate-stubs.mjs": "f3711716936307611e415a7ecd6fda9134c11b312a6120ef36dfc56b046ccf08",
     "doc/anvil-api-stubs/stub_documentation.py": "de67507573bceda189a49724be31e054f2a360fe37496f966af5d2670c353498",
     "doc/anvil-api-stubs/plotly-stubs.mjs": "1bcdc952713ab5605cce420cdf7a79d3c39fb194b9523c43c69543e41c098cc5",
@@ -51,10 +51,11 @@
     "doc/anvil-api-stubs/client-runtime.mjs": "b93a834b7aa8cca74271b939c686165417043626e0f93ea56a9e19bbb0f22895",
     "doc/anvil-api-stubs/python-stdlib.json": "dc4ee5e39e2fd4ed644983397b81505895a2742982b28b918ba575ffdf6e0e04",
     "runtime/client/js/runner/load-modules.ts": "ad9dcf5f05be42c35d720abf35d796d9d810b986b9de85e13ac0cc7a54e89203",
-    "runtime/client/js/lib/skulpt-stdlib-1.json": "a98860a1fab1768f31c36de987edbdb3404736a7f446506eb89b8335efc43ba4",
-    "runtime/client/js/lib/skulpt-stdlib-2.json": "9df9c340f07b2023c673927f2782516a036ded35eaba4b8a4732483d855acb7b",
-    "runtime/client/js/lib/skulpt-stdlib-3.json": "f4de67a9135bc3825f4ecae89552f5cdfab813069ba7b56633a0166d4fcefcbf",
-    "runtime/client/js/lib/skulpt-stdlib.js": "05a3877b93c574d4402a98d654cc9fc7f55f480e8b0cac0c992aabfad0cd65ec",
+    "runtime/client/js/lib/skulpt-stdlib-1.json": "2adfc4d7b3d6177e591d4af573aacffe08b8af3ccaf1a8d4074ba7309179f062",
+    "runtime/client/js/lib/skulpt-stdlib-2.json": "4004790f8f7891ff1c441f2360d095cad7b2911f907979aae7f33b9bd6e3967f",
+    "runtime/client/js/lib/skulpt-stdlib-3.json": "1278441db679fde8417e8a692be1a24a1499da2e05dc1c4d23b3fb87095ec86e",
+    "runtime/client/js/lib/skulpt-stdlib-4.json": "7ee13c3d096ba02eb4e85614912c6b030fc06c9bfb647816b7f187127a41e921",
+    "runtime/client/js/lib/skulpt-stdlib.js": "1b74a6279bb160558964346382fddb413026e2d91947ef57cb05ae920ab7343f",
     "runtime/client/js/lib/skulpt-stdlib.json": "1ef56af765408e09740248425c33f3ee1b3390d0bdc460e16b1152809da3a361",
     "website/static/_/redirects.yaml": "d2e78311fff80d8d911902eee2588ce7b5134fb93c4365ad13d98a41de9272d8"
   }

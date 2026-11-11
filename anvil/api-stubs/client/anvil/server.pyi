@@ -5,7 +5,7 @@
 # Type stubs for anvil.server module
 # Generated files: client/anvil/server.pyi, server/anvil/server.pyi
 
-from typing import Any, Callable, TypeVar, overload, Literal, Generic
+from typing import Any, Callable, Iterator, TypeVar, overload, Literal, Generic
 from typing_extensions import ParamSpec, TypeVar as TypeVarWithDefault
 from anvil import Media
 from anvil.tables import Row
@@ -233,17 +233,6 @@ def run_script(script_name: str, /, *args: Any) -> Any:
 
 # Request context (available only inside HTTP endpoint handlers).
 
-# Session handling
-class session:
-    """Server-side session storage.
-
-    [Anvil Docs](https://anvil.works/docs/server/sessions-and-cookies)"""
-    @staticmethod
-    def get(key: str, default: Any = None) -> Any: ...
-    @staticmethod
-    def set(key: str, value: Any) -> None: ...
-    @staticmethod
-    def clear() -> None: ...
 
 # HTTP endpoint decorator
 def http_endpoint(path: str, methods: list[str] | None = None, authenticate_users: bool = False, enable_cors: bool = False, cross_site_session: bool = False) -> Callable[[Callable[_P, _T]], Callable[_P, _T]]:

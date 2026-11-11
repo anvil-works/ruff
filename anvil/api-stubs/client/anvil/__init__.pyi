@@ -1328,13 +1328,13 @@ class Image(Component):
     @vertical_align.setter
     def vertical_align(self, value: str) -> None: ...
     @property
-    def height(self) -> str:
+    def height(self) -> str | int | float:
         """The height of this component.
 
         [Anvil Docs](https://anvil.works/docs/components/standard-components/basic#image)"""
         ...
     @height.setter
-    def height(self, value: str) -> None: ...
+    def height(self, value: str | int | float) -> None: ...
 
 
     @property
@@ -1430,7 +1430,7 @@ class Image(Component):
         display_mode: str = ...,
         horizontal_align: str = ...,
         vertical_align: str = ...,
-        height: str = ...,
+        height: str | int | float = ...,
         background: str = ...,
         border: str = ...,
         border_radius: str = ...,
@@ -1463,13 +1463,13 @@ class Spacer(Component):
     def tooltip(self, value: str) -> None: ...
 
     @property
-    def height(self) -> int:
+    def height(self) -> str | int | float:
         """The height of this component.
 
         [Anvil Docs](https://anvil.works/docs/components/standard-components/basic#spacer)"""
         ...
     @height.setter
-    def height(self, value: int) -> None: ...
+    def height(self, value: str | int | float) -> None: ...
 
 
     @property
@@ -1495,7 +1495,7 @@ class Spacer(Component):
         tag: Any = ...,
         visible: bool = ...,
         tooltip: str = ...,
-        height: int = ...,
+        height: str | int | float = ...,
         spacing_above: Literal["none", "small", "medium", "large"] | None = ...,
         spacing_below: Literal["none", "small", "medium", "large"] | None = ...,
     ) -> None: ...
@@ -2209,13 +2209,13 @@ class TextArea(Component):
     @auto_expand.setter
     def auto_expand(self, value: bool) -> None: ...
     @property
-    def height(self) -> str:
+    def height(self) -> str | int | float:
         """The height of this component.
 
         [Anvil Docs](https://anvil.works/docs/components/standard-components/basic#textarea)"""
         ...
     @height.setter
-    def height(self, value: str) -> None: ...
+    def height(self, value: str | int | float) -> None: ...
     @property
     def font_size(self) -> int | float | None:
         """The height of text displayed on this component in pixels
@@ -2362,7 +2362,7 @@ class TextArea(Component):
         text: str = ...,
         placeholder: str = ...,
         auto_expand: bool = ...,
-        height: str = ...,
+        height: str | int | float = ...,
         font_size: int | float | None = ...,
         font: str = ...,
         bold: bool = ...,
@@ -4092,13 +4092,13 @@ class XYPanel(Container):
     @border.setter
     def border(self, value: str) -> None: ...
     @property
-    def height(self) -> str:
+    def height(self) -> str | int | float:
         """The height of this component.
 
         [Anvil Docs](https://anvil.works/docs/components/standard-components/containers#xypanel)"""
         ...
     @height.setter
-    def height(self, value: str) -> None: ...
+    def height(self, value: str | int | float) -> None: ...
     @property
     def width(self) -> str:
         """[Anvil Docs](https://anvil.works/docs/components/standard-components/containers#xypanel)"""
@@ -4163,7 +4163,7 @@ class XYPanel(Container):
         background: str = ...,
         foreground: str = ...,
         border: str = ...,
-        height: str = ...,
+        height: str | int | float = ...,
         width: str = ...,
         align: str = ...,
         margin: MarginPropertyValue = ...,
@@ -4889,13 +4889,13 @@ class Canvas(Component):
     @width.setter
     def width(self, value: int) -> None: ...
     @property
-    def height(self) -> int:
+    def height(self) -> str | int | float:
         """The height of this component.
 
         [Anvil Docs](https://anvil.works/docs/components/standard-components/canvas)"""
         ...
     @height.setter
-    def height(self, value: int) -> None: ...
+    def height(self, value: str | int | float) -> None: ...
     @property
     def background(self) -> str:
         """The background colour of this component.
@@ -5245,7 +5245,7 @@ class Canvas(Component):
         tooltip: str = ...,
         role: str | list[str] | None = ...,
         width: int = ...,
-        height: int = ...,
+        height: str | int | float = ...,
         background: str = ...,
         border: str = ...,
         foreground: str = ...,
@@ -7090,13 +7090,13 @@ class GoogleMap(Component):
     [Anvil Docs](https://anvil.works/docs/components/standard-components/maps)"""
 
     @property
-    def height(self) -> str:
+    def height(self) -> str | int | float:
         """The height of this component.
 
         [Anvil Docs](https://anvil.works/docs/components/standard-components/maps)"""
         ...
     @height.setter
-    def height(self, value: str) -> None: ...
+    def height(self, value: str | int | float) -> None: ...
     @property
     def margin(self) -> MarginPropertyValue:
         """Margin for this component. Only available in apps that have been migrated to use Layouts.
@@ -7215,7 +7215,7 @@ class GoogleMap(Component):
         street_view_control_options: _MapStreetViewControlOptions = ...,
         zoom_control: bool = ...,
         zoom_control_options: _MapZoomControlOptions = ...,
-        height: str = ...,
+        height: str | int | float = ...,
         margin: MarginPropertyValue = ...,
         spacing_above: Literal["none", "small", "medium", "large"] | None = ...,
         spacing_below: Literal["none", "small", "medium", "large"] | None = ...,
@@ -7334,13 +7334,13 @@ class YouTubeVideo(Component):
     @foreground.setter
     def foreground(self, value: str) -> None: ...
     @property
-    def height(self) -> str:
+    def height(self) -> str | int | float:
         """The height of this component.
 
         [Anvil Docs](https://anvil.works/docs/components/standard-components/basic#youtube-video)"""
         ...
     @height.setter
-    def height(self, value: str) -> None: ...
+    def height(self, value: str | int | float) -> None: ...
     @property
     def margin(self) -> MarginPropertyValue:
         """Margin for this component. Only available in apps that have been migrated to use Layouts.
@@ -7425,7 +7425,7 @@ class YouTubeVideo(Component):
         background: str = ...,
         border: str = ...,
         foreground: str = ...,
-        height: str = ...,
+        height: str | int | float = ...,
         margin: MarginPropertyValue = ...,
         spacing_above: Literal["none", "small", "medium", "large"] | None = ...,
         spacing_below: Literal["none", "small", "medium", "large"] | None = ...,
