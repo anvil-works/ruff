@@ -5,7 +5,7 @@ import { withBrowser } from './browser.mjs';
 test('client stdlib suggestions and import diagnostics follow Skulpt without restricting server code', () => withBrowser(async page => {
     const result = await page.evaluate(async () => {
         const { BrowserAnalysisSession } = await import('/session.mjs');
-        const source = 'import pathlib\nfrom os import path\nimport math\nfrom . import helpers\nimport webbrowser\nimport urllib.request\nimport urllib.parse\nimport collections.abc\nfrom urllib import parse\nfrom collections import abc, namedtuple\nfrom urllib import request\n';
+        const source = 'import pathlib\nfrom os import path\nimport math\nfrom . import helpers\nimport webbrowser\nimport urllib.request\nimport urllib.parse\nimport collections.abc\nfrom urllib import parse\nfrom collections import abc, namedtuple\nfrom urllib import request\nfrom typing import TypedDict\n';
         const session = new BrowserAnalysisSession({ workerUrl: '/worker.mjs', rootUri: 'file:///app', files: {
             '/app/anvil.yaml': 'package_name: Main\n', '/app/client_code/__init__.py': '',
             '/app/client_code/main.py': source, '/app/client_code/helpers.py': 'pass\n', '/app/client_code/pathlib.py': 'pass\n', '/app/server_code/main.py': source.replace('from . import helpers', ''),
@@ -34,7 +34,8 @@ test('client stdlib suggestions and import diagnostics follow Skulpt without res
     assert.deepEqual(unsupported.map(item => [item.range.start.line, item.range.start.character, item.range.end.character]), [[0, 7, 14], [1, 5, 7], [6, 7, 19], [7, 7, 22], [8, 19, 24], [9, 24, 27]]);
     assert(!result.serverDiagnostics.result.items.some(item => item.code === 'reportAnvilUnsupportedSkulptImport'));
     const labels = result.imports.result.items.map(item => item.label);
-    for (const name of ['pathlib', 'os', 'subprocess', 'builtins', 'typing', 'aifc']) assert(!labels.includes(name), `${name} is not available to Skulpt`);
+    for (const name of ['pathlib', 'os', 'subprocess', 'builtins', 'aifc']) assert(!labels.includes(name), `${name} is not available to Skulpt`);
+    assert(labels.includes('typing'));
     assert(labels.includes('math'));
     assert(labels.includes('webbrowser'));
     assert(result.childImports.result.items.some(item => item.label === 'request'));
