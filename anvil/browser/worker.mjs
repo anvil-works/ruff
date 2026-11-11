@@ -427,7 +427,7 @@ function environmentFor(uri) {
 }
 
 // The ordered request queue owns the fetch and mount. Source updates stay
-// synchronous; a failed fetch rejects only its query and a later query can retry.
+// synchronous. A later query can retry a failed fetch.
 function availablePacks(server) {
     if (!server) return stubPacks.filter(pack => !pack.server);
     const requirements = [...JSON.parse(files.get(`${root}/.anvil/server-requirements.json`) ?? '[]'),
@@ -446,6 +446,18 @@ function packForPath(path) {
         path.startsWith(`${root}/.anvil/types/${pack.server ? 'server' : 'client'}/${module}/`)));
 }
 
+function hasDesignerPlot() {
+    const view = preparedViews.get(isServer);
+    // Use the rendered component fields so this agrees with what Ty can see.
+    return view.hasDesignerPlot ??= Object.entries(view.prepared.files).some(([path, source]) =>
+        path.endsWith('/_anvil_designer.pyi') && source.includes(': anvil.Plot\n'));
+}
+
+function referencesPlot(source) {
+    return JSON.parse(renameNames(source)).some(({ name, imported, alias }) =>
+        name === 'Plot' && !imported && !alias);
+}
+
 async function loadPacksForRequest(method, params) {
     if (method === 'initialize' || updateMethods.includes(method)) return;
     const uri = params.textDocument?.uri ?? params.uri ?? params.data?.documentation?.uri;
@@ -458,23 +470,47 @@ async function loadPacksForRequest(method, params) {
     const requested = uri && !uri.startsWith('vendored:') && packForPath(pathForUri(uri));
     const imports = new Set();
     const modules = pending.flatMap(pack => pack.modules);
+    const plotly = pending.find(pack => pack.id === 'plotly-client');
+    let usesPlot = plotly ? hasDesignerPlot() : false;
     const collect = source => {
-        if (!modules.some(module => source.includes(module))) return;
-        for (const imported of importsFor(source)) if (!imported.relative && imported.module) imports.add(imported.module.split('.')[0]);
+        // Plot.layout uses the Plotly types even when the app never imports Plotly.
+        const mayUsePlot = plotly && !usesPlot && source.includes('anvil') && /\bPlot\b/.test(source);
+        if (!mayUsePlot && !modules.some(module => source.includes(module))) return;
+        let mentionsPlot;
+        for (const imported of importsFor(source)) {
+            if (imported.relative || !imported.module) continue;
+            const module = imported.module.split('.')[0];
+            imports.add(module);
+            if (!mayUsePlot || usesPlot || module !== 'anvil') continue;
+            if (imported.module === 'anvil' && imported.bindings?.some(({ name }) => name === 'Plot')) {
+                usesPlot = true;
+            } else if (!imported.bindings ||
+                (imported.module === 'anvil' && imported.bindings.some(({ name }) => name === '*'))) {
+                usesPlot = mentionsPlot ??= referencesPlot(source);
+            }
+        }
     };
     for (const [path, sourceServer] of sourceEnvironments) if (server || !sourceServer) collect(current.get(path));
     for (const context of contexts.values()) if (context.server === server) collect((context.value.previousCode ?? '') + '\n' + context.value.code);
     const needed = pending.filter(pack => pack === requested || pack.modules.some(module => imports.has(module)));
+    const implicitPlotly = usesPlot && !needed.includes(plotly) ? plotly : undefined;
+    if (implicitPlotly) needed.push(implicitPlotly);
     for (const pack of needed) for (const id of pack.dependencies ?? []) {
         const dependency = pending.find(candidate => candidate.id === id);
         if (dependency && !needed.includes(dependency)) needed.push(dependency);
     }
     if (!needed.length) return;
-    const fetched = await Promise.all(needed.map(async pack => {
-        const response = await fetch(pack.url);
-        if (!response.ok) throw new Error(`Could not load ${pack.id === 'plotly-client' ? 'Plotly' : pack.id} completion declarations: HTTP ${response.status}`);
-        return [String(pack.url), await response.json()];
-    }));
+    const fetched = (await Promise.all(needed.map(async pack => {
+        try {
+            const response = await fetch(pack.url);
+            if (!response.ok) throw new Error(`Could not load ${pack.id === 'plotly-client' ? 'Plotly' : pack.id} completion declarations: HTTP ${response.status}`);
+            return [String(pack.url), await response.json()];
+        } catch (error) {
+            // An implicit catalogue fetch can fail while ordinary editing continues.
+            if (pack !== implicitPlotly) throw error;
+        }
+    }))).filter(Boolean);
+    if (!fetched.length) return;
     for (const [id, source] of fetched) loadedPacks.set(id, source);
     // New declarations can improve previously gradual Anvil-derived types.
     clearInference();

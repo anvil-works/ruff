@@ -227,6 +227,40 @@ test('Plotly stays out of eager browser assets and loads once for completion and
     assert.match(loaded.source.text, /class Scatter\(/);
 }));
 
+test('Designer Plot typing loads on demand and an implicit fetch can retry', () => withBrowser(async page => {
+    let requests = 0;
+    await page.route('**/dist/stubs/plotly-client-*.json', route => ++requests === 1
+        ? route.fulfill({ status: 503, body: 'Temporarily unavailable' }) : route.continue());
+    await page.evaluate(async () => {
+        const { BrowserAnalysisSession } = await import('/session.mjs');
+        const path = '/app/client_code/Form1/__init__.py';
+        const templatePath = '/app/client_code/Form1/form_template.yaml';
+        const template = { class_name: 'Form1', container: { type: 'ColumnPanel' }, components: [] };
+        const source = 'from ._anvil_designer import Form1Template\nfrom anvil import *\n# Plot() example\nclass Form1(Form1Template):\n    def probe(self):\n        self.';
+        const session = new BrowserAnalysisSession({ workerUrl: '/worker.mjs', rootUri: 'file:///app', files: {
+            '/app/anvil.yaml': 'package_name: Main\n',
+            [path]: source,
+            [templatePath]: JSON.stringify(template),
+        } });
+        const complete = () => session.query('textDocument/completion', {
+            textDocument: { uri: 'file://' + path }, position: { line: 5, character: 13 },
+        });
+        window.addPlot = async () => {
+            template.components.push({ name: 'plot_1', type: 'Plot' });
+            try {
+                await session.updateFiles({ [templatePath]: JSON.stringify(template) });
+                const afterFailure = await complete();
+                const afterRetry = await complete();
+                return [afterFailure, afterRetry].map(response => response.result.items.map(item => item.label));
+            } finally { session.dispose(); }
+        };
+        await complete();
+    });
+    assert.equal(requests, 0, 'An ordinary Form must not fetch the catalogue');
+    for (const labels of await page.evaluate(() => window.addPlot())) assert(labels.includes('plot_1'));
+    assert.equal(requests, 2, 'A failed implicit fetch can retry without interrupting completion');
+}));
+
 test('a failed Plotly fetch leaves edits and server completion usable and retries on the next client request', () => withBrowser(async page => {
     let requests = 0;
     await page.route('**/dist/stubs/plotly-client-*.json', route => ++requests === 1

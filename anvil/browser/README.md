@@ -33,11 +33,12 @@ MIME types. The IDE copies them beneath a versioned URL for cache reuse.
 
 Client Plotly declarations live in a content-hashed JSON pack. Only the package
 root ships in the base API JSON asset, so import completion can discover it without
-downloading the catalogue. The first client query with a Plotly import in selected
-app/dependency source or a live context fetches the pack before analysis. Read-only
-Plotly source requests also load it. The worker retains it across app updates;
-failed downloads leave later queries free to retry and do not block edits or
-server queries. This does not add server Plotly support.
+downloading the catalogue. The first client query with a Plotly import or use of
+Anvil's Plot component in selected app/dependency source, Designer metadata, or
+a live context fetches the pack before analysis. Read-only
+Plotly source requests also load it. The worker retains it across app updates.
+A failed implicit fetch leaves client queries usable with the available types.
+Later queries can retry a failed download.
 
 Server NumPy and pandas use the same loader. `runtime_options.server_spec.requirements`
 selects declarations for NumPy 2.5.4 and pandas 3.1.0. Unversioned requirements
