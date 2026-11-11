@@ -13,11 +13,10 @@ finished after the checker exists on npm.
 
 The browser package has its own version in `anvil/browser/package.json`. A
 browser-only release does not require new native checker or Python-stub packages.
-Browser `0.1.0-canary.15` loads the Plotly catalogue for Anvil Plot components
-even without an explicit Plotly import. It includes the regenerated Plot and
-Figure declarations. It uses
-`@anvil-works/python-stubs@0.1.0-canary.2` for optional pytest typing. Verify the
-published typing pack and check that the new browser version is available
+Browser `0.1.0-canary.17` uses `@anvil-works/python-stubs@0.1.0-canary.3` to
+load server Plotly declarations on demand for compatible environments. The
+client Plotly catalogue still supplies Anvil Plot component typing. Verify
+the published typing pack and check that the new browser version is available
 before publication.
 
 Publish from the main checkout on `anvil`. Land reviewed changes on that branch

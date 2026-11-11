@@ -182,6 +182,57 @@ test('server typing snapshots respect constraints and leave unresolved requireme
     for (const entry of result) assert.equal(entry.ndarray, entry.expected, entry.requirements);
 }));
 
+test('server Plotly loads for an advertised compatible package and stays separate from client Plotly', () => withBrowser(async page => {
+    const packs = [];
+    page.on('request', request => {
+        const match = new URL(request.url()).pathname.match(/\/dist\/stubs\/(plotly(?:-client)?)-[a-f0-9]{64}\.json$/);
+        if (match) packs.push(match[1]);
+    });
+    await page.exposeFunction('plotlyRequests', () => [...packs]);
+    const result = await page.evaluate(async () => {
+        const { BrowserAnalysisSession } = await import('/session.mjs');
+        const serverPath = '/app/server_code/chart.py';
+        const clientPath = '/app/client_code/form.py';
+        const config = requirements => JSON.stringify({ package_name: 'Main', runtime_options: { server_spec: {
+            base: 'python310-standard', requirements,
+        } } });
+        const session = new BrowserAnalysisSession({ workerUrl: '/worker.mjs', rootUri: 'file:///app', files: {
+            '/app/anvil.yaml': config('plotly==5.24.0'),
+            '/app/.anvil/server-requirements.json': '["plotly"]',
+            '/app/.anvil/python-environment.json': '{"server":"3.10"}',
+            [serverPath]: 'name = "Ada"\nname.up',
+            [clientPath]: '',
+        } });
+        const complete = async (path, line, character) => (await session.query('textDocument/completion', {
+            textDocument: { uri: 'file://' + path }, position: { line, character }, context: { autoImport: false },
+        })).result.items.map(item => item.label);
+        try {
+            const ordinary = await complete(serverPath, 1, 7);
+            const beforeImport = await window.plotlyRequests();
+            await session.openDocument('file://' + serverPath,
+                'import plotly.graph_objects as go\nfigure = go.Figure()\nbar = go.Bar()\nfigure.update_l\nbar.mark');
+            const incompatible = await complete(serverPath, 3, 15);
+            const afterIncompatible = await window.plotlyRequests();
+            await session.updateFiles({ '/app/anvil.yaml': config('') });
+            const figure = await complete(serverPath, 3, 15);
+            const bar = await complete(serverPath, 4, 8);
+            const afterServer = await window.plotlyRequests();
+            await session.openDocument('file://' + clientPath, 'import plotly.graph_objects as go\ngo.Scatter().marker.co');
+            const client = await complete(clientPath, 1, 22);
+            return { ordinary, beforeImport, incompatible, afterIncompatible, figure, bar, afterServer, client };
+        } finally { session.dispose(); }
+    });
+    assert(result.ordinary.includes('upper'));
+    assert.deepEqual(result.beforeImport, []);
+    assert(!result.incompatible.includes('update_layout'));
+    assert.deepEqual(result.afterIncompatible, []);
+    assert(result.figure.includes('update_layout'));
+    assert(result.bar.includes('marker'));
+    assert.deepEqual(result.afterServer, ['plotly']);
+    assert(result.client.includes('color'));
+    assert.deepEqual(packs, ['plotly', 'plotly-client']);
+}));
+
 test('Plotly stays out of eager browser assets and loads once for completion and readonly navigation', () => withBrowser(async page => {
     const packs = [];
     let compatibility;
