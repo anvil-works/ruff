@@ -9,7 +9,14 @@ const root = new URL('./', import.meta.url);
 const manifestUrl = new URL('dist/BUILD.json', root);
 const packageJson = JSON.parse(await readFile(new URL('package.json', root), 'utf8'));
 const publicFiles = ['session.mjs', 'contexts.mjs', 'forms.mjs', 'source-projection.mjs', 'renames.mjs', 'worker.mjs'];
-const engineBuild = { optLevel: 'z', codegenUnits: 1, defaultFeatures: false, features: ['console_error_panic_hook'] };
+const engineBuild = {
+    optLevel: 'z',
+    codegenUnits: 1,
+    defaultFeatures: false,
+    features: ['console_error_panic_hook'],
+    // Project-wide references can exhaust the default Wasm stack during type inference.
+    stackBytes: 8 * 1024 * 1024,
+};
 const hash = source => createHash('sha256').update(source).digest('hex');
 const git = args => execFileSync('git', args, { cwd: fileURLToPath(root), encoding: 'utf8' }).trim();
 const buildInputs = ['.', '../compat', '../api-stubs', '../../crates', '../../Cargo.toml', '../../Cargo.lock',
@@ -38,14 +45,20 @@ if (process.argv.includes('--verify')) {
         assert.equal(hash(await readFile(new URL(file, root))), expected, `Browser asset changed after its release build: ${file}`);
     }
 } else {
+    // Cargo gives these global flags precedence over the target stack setting.
+    assert(process.env.RUSTFLAGS === undefined && process.env.CARGO_ENCODED_RUSTFLAGS === undefined,
+        'Unset RUSTFLAGS and CARGO_ENCODED_RUSTFLAGS before building the Ty browser package');
     const fingerprint = await inputFingerprint();
     command(process.execPath, ['build-comlink.mjs']);
     command(process.execPath, ['build-stub-packs.mjs']);
     command('wasm-pack', ['build', '../../crates/ty_wasm', '--release', '--target', 'web',
         '--out-dir', '../../anvil/browser/dist/wasm', '--', '--locked', '--no-default-features',
         '--features', engineBuild.features.join(',')], {
-        env: { CARGO_PROFILE_RELEASE_OPT_LEVEL: engineBuild.optLevel,
-            CARGO_PROFILE_RELEASE_CODEGEN_UNITS: String(engineBuild.codegenUnits) },
+        env: {
+            CARGO_PROFILE_RELEASE_OPT_LEVEL: engineBuild.optLevel,
+            CARGO_PROFILE_RELEASE_CODEGEN_UNITS: String(engineBuild.codegenUnits),
+            CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_RUSTFLAGS: `-C link-arg=-z -C link-arg=stack-size=${engineBuild.stackBytes}`,
+        },
     });
     command('wasm-pack', ['build', '../compat', '--release', '--target', 'web',
         '--out-dir', '../browser/dist/compat', '--', '--features', 'browser', '--locked']);
