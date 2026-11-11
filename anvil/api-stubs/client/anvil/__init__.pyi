@@ -10,6 +10,8 @@ from typing import Any, Callable, ClassVar, Generic, Iterable, overload, Iterato
 from typing_extensions import TypeVar, Unpack, deprecated, override
 
 from . import property_utils
+from plotly._base import _PlotlyObject
+from plotly.graph_objs import Figure as _PlotlyFigure, Layout as _PlotlyLayout
 
 # Runtime exports bound the auto-import index; typing helpers remain explicitly importable.
 __all__ = [
@@ -5252,6 +5254,19 @@ class Canvas(Component):
         spacing_below: Literal["none", "small", "medium", "large"] | None = ...,
     ) -> None: ...
 
+# Figure accepts lists of concrete trace classes, such as list[go.Bar].
+_TraceDict = TypeVar("_TraceDict", bound=dict[str, Any])
+
+
+class _PlotTemplates:
+    default: str
+
+    def __getattr__(self, name: str) -> Any: ...
+    def __setattr__(self, name: str, value: Any) -> None: ...
+    def __getitem__(self, name: str) -> Any: ...
+    def __setitem__(self, name: str, value: Any) -> None: ...
+
+
 class Plot(Component):
     """A Plotly chart component.
 
@@ -5275,21 +5290,21 @@ class Plot(Component):
     def tooltip(self, value: str) -> None: ...
 
     @property
-    def data(self) -> list[dict[str, Any]]:
+    def data(self) -> list[_PlotlyObject | Any]:
         """Plot traces
 
         [Anvil Docs](https://anvil.works/docs/components/standard-components/plots)"""
         ...
     @data.setter
-    def data(self, value: list[dict[str, Any]]) -> None: ...
+    def data(self, value: dict[str, Any] | Iterable[dict[str, Any]]) -> None: ...
     @property
-    def layout(self) -> dict[str, Any]:
+    def layout(self) -> _PlotlyLayout:
         """Plot layout
 
         [Anvil Docs](https://anvil.works/docs/components/standard-components/plots)"""
         ...
     @layout.setter
-    def layout(self, value: dict[str, Any]) -> None: ...
+    def layout(self, value: dict[str, Any] | None) -> None: ...
     @property
     def config(self) -> dict[str, Any]:
         """Plot config
@@ -5299,13 +5314,13 @@ class Plot(Component):
     @config.setter
     def config(self, value: dict[str, Any]) -> None: ...
     @property
-    def figure(self) -> dict[str, Any]:
+    def figure(self) -> _PlotlyFigure:
         """The Plotly figure to display. Specifies layout and data.
 
         [Anvil Docs](https://anvil.works/docs/components/standard-components/plots)"""
         ...
     @figure.setter
-    def figure(self, value: dict[str, Any]) -> None: ...
+    def figure(self, value: dict[str, Any] | list[_TraceDict] | tuple[dict[str, Any], ...] | None) -> None: ...
     @property
     def interactive(self) -> bool:
         """Whether this plot should be interactive
@@ -5317,13 +5332,13 @@ class Plot(Component):
 
 
     @property
-    def height(self) -> str:
+    def height(self) -> str | int | float:
         """The height of this component.
 
         [Anvil Docs](https://anvil.works/docs/components/standard-components/plots)"""
         ...
     @height.setter
-    def height(self, value: str) -> None: ...
+    def height(self, value: str | int | float) -> None: ...
     @property
     def margin(self) -> MarginPropertyValue:
         """Margin for this component. Only available in apps that have been migrated to use Layouts.
@@ -5372,7 +5387,7 @@ class Plot(Component):
     @override
     def raise_event(self, event_name: _PlotEvents | str, /, **event_args: Any) -> None: ...
 
-    templates: dict[str, Any]
+    templates: ClassVar[_PlotTemplates]
     """plotly templates, see plotly docs for valid template names. Set the default template using Plot.templates.default = 'seaborn'.
 
     [Anvil Docs](https://anvil.works/docs/components/standard-components/plots)"""
@@ -5420,12 +5435,12 @@ class Plot(Component):
         tag: Any = ...,
         visible: bool = ...,
         tooltip: str = ...,
-        data: list[dict[str, Any]] = ...,
-        layout: dict[str, Any] = ...,
+        data: dict[str, Any] | Iterable[dict[str, Any]] = ...,
+        layout: dict[str, Any] | None = ...,
         config: dict[str, Any] = ...,
-        figure: dict[str, Any] = ...,
+        figure: dict[str, Any] | list[_TraceDict] | tuple[dict[str, Any], ...] | None = ...,
         interactive: bool = ...,
-        height: str = ...,
+        height: str | int | float = ...,
         margin: MarginPropertyValue = ...,
         spacing_above: Literal["none", "small", "medium", "large"] | None = ...,
         spacing_below: Literal["none", "small", "medium", "large"] | None = ...,

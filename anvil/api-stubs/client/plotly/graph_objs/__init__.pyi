@@ -8568,7 +8568,7 @@ class Layout(_PlotlyObject):
 
 class Figure(_PlotlyObject):
     "Create a new 'Figure' object"
-    data: list[Any] | Any
+    data: list[_PlotlyObject] | Any
     @property
     def layout(self) -> Layout | Any: ...
     @layout.setter

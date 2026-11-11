@@ -6,7 +6,7 @@
 
 [Anvil Docs](https://anvil.works/docs/server/email)"""
 
-from typing import Callable, TypeVar, overload
+from typing import Callable, Mapping, Sequence, TypeVar, overload
 
 from anvil import Media
 
@@ -93,6 +93,44 @@ class Message:
     """A list of this email's attachments."""
     inline_attachments: dict[str, Media]
     """A dictionary of this email's inline attachments. Keys are ContentID headers, values are the attachments as Media Objects."""
+
+    def __init__(
+        self,
+        from_address: str | None = "Sender <sender@example.com>",
+        to: str | Sequence[str] | None = "App <app@example.com>",
+        cc: str | Sequence[str] | None = None,
+        subject: str | None = None,
+        text: str | None = None,
+        html: str | None = None,
+        attachments: Sequence[Media] | None = None,
+        inline_attachments: Mapping[str, Media] | None = None,
+        headers: Sequence[tuple[str, str]] | dict[str, str] | None = None,
+        envelope_from: str | None = None,
+        envelope_recipient: str | None = None,
+        dkim: bool = True,
+    ) -> None:
+        """Build an incoming email, to pass to an `@anvil.email.handle_message` function in a test.
+
+        There's no reason to construct a Message except for testing.
+
+        In a test you can call the decorated function with the Message, eg
+        `incoming_email(Message(from_address="Alice <alice@example.com>", text="Hi"))`.
+
+        Args:
+            from_address: The From address. Can be bare ('alice@example.com') or include a display name ('Alice <alice@example.com>').
+            to: The To address or addresses.
+            cc: The Cc address or addresses.
+            subject: The subject line.
+            text: The plain-text content.
+            html: The HTML content.
+            attachments: A list of Media objects.
+            inline_attachments: A dictionary of Content-IDs to Media objects.
+            headers: Extra headers, as (name, value) pairs or a dictionary. They replace the From, To, Cc, Subject and Message-ID headers the message would otherwise have.
+            envelope_from: The sender according to the SMTP envelope. Defaults to the From address.
+            envelope_recipient: The recipient according to the SMTP envelope, eg for a message received as a Bcc. Defaults to the first To address.
+            dkim: If False, the message isn't signed by its sender's domain, so `require_dkim=True` handlers reject it.
+        """
+        ...
 
     def get_header(self, header_name: str, default: str | None = None) -> str | None:
         """Return the value of the specified header, or default value if it is not present.

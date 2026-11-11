@@ -13,9 +13,9 @@ _T = TypeVar("_T", bound="Row")
 _F = TypeVar("_F", bound="Callable[..., Any]")
 
 class Row:
-    """Base class for table rows.
+    """A Data Table row.
 
-    [Anvil Docs](https://anvil.works/docs/data-tables/data-tables-in-code)"""
+    [Anvil Docs](https://anvil.works/docs/data-tables/data-tables-in-code#row-objects)"""
     def __init_subclass__(
         cls,
         *,
@@ -32,9 +32,13 @@ class Row:
     def __contains__(self, key: str, /) -> bool: ...
     def __iter__(self) -> Iterator[tuple[str, Any]]: ...
     def update(self, **kwargs: Any) -> None:
-        """Update multiple columns of this row at once.
+        """Set values for multiple columns of this row at once. Use keyword arguments
+        to specify column values.
 
-        [Anvil Docs](https://anvil.works/docs/data-tables/data-tables-in-code)"""
+        Changes are written to the database, or buffered until save() is called
+        if this Row is buffering changes.
+
+        [Anvil Docs](https://anvil.works/docs/data-tables/data-tables-in-code#updating-and-deleting-rows)"""
         ...
     def delete(self) -> None:
         """Delete this row from the table.
@@ -49,21 +53,15 @@ class Row:
     def save(self) -> None:
         """Save buffered changes to this row.
 
-        Only available with Accelerated Data Tables; not available with legacy Data Tables.
-
         [Anvil Docs](https://anvil.works/docs/data-tables/data-tables-in-code)"""
         ...
     def reset(self) -> None:
         """Reset buffered changes to this row.
 
-        Only available with Accelerated Data Tables; not available with legacy Data Tables.
-
         [Anvil Docs](https://anvil.works/docs/data-tables/data-tables-in-code)"""
         ...
     def buffer_changes(self, buffered: bool | None = None) -> Any:
         """Context manager for buffered mode.
-
-        Only available with Accelerated Data Tables; not available with legacy Data Tables.
 
         [Anvil Docs](https://anvil.works/docs/data-tables/data-tables-in-code)"""
         ...
@@ -71,49 +69,44 @@ class Row:
     def buffered_changes(self) -> dict[str, Any] | None:
         """Pending buffered changes for this row.
 
-        Only available with Accelerated Data Tables; not available with legacy Data Tables.
-
         [Anvil Docs](https://anvil.works/docs/data-tables/data-tables-in-code)"""
         ...
     def refresh(self, fetch: Any = None) -> None:
-        """Refresh this row from the database.
+        """Clear this Row object's cached column values and immediately fetch fresh
+        values from the database.
 
-        Only available with Accelerated Data Tables; not available with legacy Data Tables.
+        With no fetch argument, fetches all accessible columns. Pass a
+        query.fetch_only(...) object to fetch only the specified columns; other
+        columns remain uncached until accessed.
 
-        [Anvil Docs](https://anvil.works/docs/data-tables/data-tables-in-code)"""
+        [Anvil Docs](https://anvil.works/docs/data-tables/data-tables-in-code#explicit-cache-control)"""
         ...
     def fetch(self, fetch: Any) -> None:
-        """Fetch specific columns for this row.
+        """Fetch fresh values for specific columns of this Row from the database,
+        even if those columns are already cached.
 
-        Only available with Accelerated Data Tables; not available with legacy Data Tables.
+        Pass a query.fetch_only(...) object specifying which columns to fetch.
+        Other columns keep their existing cached values or remain uncached.
 
-        [Anvil Docs](https://anvil.works/docs/data-tables/data-tables-in-code)"""
+        [Anvil Docs](https://anvil.works/docs/data-tables/data-tables-in-code#explicit-cache-control)"""
         ...
     def get(self, key: str, default: Any = None) -> Any:
         """Get a column value, returning default if this row has no such column.
-
-        Only available with Accelerated Data Tables; not available with legacy Data Tables.
 
         [Anvil Docs](https://anvil.works/docs/data-tables/data-tables-in-code)"""
         ...
     def values(self) -> Iterator[Any]:
         """Iterator of column values.
 
-        Only available with Accelerated Data Tables; not available with legacy Data Tables.
-
         [Anvil Docs](https://anvil.works/docs/data-tables/data-tables-in-code)"""
         ...
     def keys(self) -> Iterator[str]:
         """Iterator of column names.
 
-        Only available with Accelerated Data Tables; not available with legacy Data Tables.
-
         [Anvil Docs](https://anvil.works/docs/data-tables/data-tables-in-code)"""
         ...
     def items(self) -> Iterator[tuple[str, Any]]:
         """Iterator of (name, value) pairs.
-
-        Only available with Accelerated Data Tables; not available with legacy Data Tables.
 
         [Anvil Docs](https://anvil.works/docs/data-tables/data-tables-in-code)"""
         ...
@@ -133,8 +126,6 @@ class SearchIterator(Generic[_T], Iterator[_T]):
     def refresh(self) -> None:
         """Clear cached results for this iterator.
 
-        Only available with Accelerated Data Tables; not available with legacy Data Tables.
-
         [Anvil Docs](https://anvil.works/docs/data-tables/data-tables-in-code)"""
         ...
     def to_csv(self, escape_for_excel: bool = False) -> Media:
@@ -144,8 +135,6 @@ class SearchIterator(Generic[_T], Iterator[_T]):
         ...
     def delete_all_rows(self) -> None:
         """Delete all rows matching this search.
-
-        Only available with Accelerated Data Tables; not available with legacy Data Tables.
 
         [Anvil Docs](https://anvil.works/docs/data-tables/data-tables-in-code)"""
         ...
@@ -163,9 +152,6 @@ class Table(Generic[_T]):
         ...
     def get_by_id(self, row_id: str, /, fetch: Any = None) -> _T | None:
         """Get a row by its unique ID.
-
-        The fetch argument is only available with Accelerated Data Tables; it is
-        not available with legacy Data Tables.
 
         [Anvil Docs](https://anvil.works/docs/data-tables/data-tables-in-code)"""
         ...
@@ -193,8 +179,6 @@ class Table(Generic[_T]):
     def add_rows(self, rows: Iterable[Mapping[str, Any]], /) -> list[_T]:
         """Add multiple rows to this table.
 
-        Only available with Accelerated Data Tables; not available with legacy Data Tables.
-
         [Anvil Docs](https://anvil.works/docs/data-tables/data-tables-in-code)"""
         ...
     def has_row(self, row: Row, /) -> bool:
@@ -214,8 +198,6 @@ class Table(Generic[_T]):
         ...
     def restrict_columns(self, col_spec: Any, /) -> "Table[_T]":
         """Return a view restricted to the given columns.
-
-        Only available with Accelerated Data Tables; not available with legacy Data Tables.
 
         [Anvil Docs](https://anvil.works/docs/data-tables/data-tables-in-code#column-restricted-views)"""
         ...
@@ -437,8 +419,6 @@ def on_transaction_end(
 
 def get_table_by_id(table_id: str) -> Table[Row]:
     """Get a table by id. Can pass a row id in, and the table the row belongs to will be returned.
-
-    Only available with Accelerated Data Tables; not available with legacy Data Tables.
 
     [Anvil Docs](https://anvil.works/docs/data-tables/data-tables-in-code)"""
     ...

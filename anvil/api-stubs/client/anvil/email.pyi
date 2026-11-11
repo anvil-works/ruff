@@ -6,7 +6,7 @@
 
 [Anvil Docs](https://anvil.works/docs/server/email)"""
 
-from typing import Callable, TypeVar, overload
+from typing import Callable, Mapping, Sequence, TypeVar, overload
 
 from anvil import Media
 
@@ -90,6 +90,7 @@ class Message:
     """A list of this email's attachments."""
     inline_attachments: dict[str, Media]
     """A dictionary of this email's inline attachments. Keys are ContentID headers, values are the attachments as Media Objects."""
+
 
     def get_header(self, header_name: str, default: str | None = None) -> str | None:
         """Return the value of the specified header, or default value if it is not present.
