@@ -116,8 +116,112 @@ pub struct Workspace {
     system: WasmSystem,
 }
 
+impl Workspace {
+    fn file_offset_for_position(
+        &self,
+        file: &FileHandle,
+        position: Position,
+    ) -> Result<TextSize, Error> {
+        position.to_text_size(
+            &source_text(&self.db, file.file),
+            &line_index(&self.db, file.file),
+            self.position_encoding,
+        )
+    }
+}
+
 #[wasm_bindgen]
 impl Workspace {
+    #[wasm_bindgen(js_name = "exportTypedDictType")]
+    pub fn export_typed_dict_type(
+        &self,
+        file: &FileHandle,
+        position: Position,
+        can_import: &js_sys::Function,
+    ) -> Result<Option<TypedDictTypeExport>, Error> {
+        let offset = self.file_offset_for_position(file, position)?;
+        let file = self.db.program_file(file.file);
+        let env = ProgramEnvironment::from_file(file);
+        let export = ty_ide::inferred_type_at(&self.db, file, offset).and_then(|ty| {
+            ty_python_semantic::types::ide_support::export_typed_dict_type(
+                &self.db,
+                &env,
+                ty,
+                &|file, name| {
+                    can_import
+                        .call2(
+                            &JsValue::UNDEFINED,
+                            &JsValue::from_str(file.path(&self.db).as_str()),
+                            &JsValue::from_str(name),
+                        )
+                        .ok()
+                        .and_then(|value| value.as_bool())
+                        .unwrap_or(false)
+                },
+            )
+        });
+        Ok(export.map(|export| TypedDictTypeExport {
+            source: export.source,
+            imports: export
+                .imports
+                .into_iter()
+                .map(|imported| TypeDeclarationOrigin {
+                    line: imported.line,
+                    column: imported.column,
+                    target: location_link_from_navigation_target(
+                        &NavigationTarget::from(imported.target),
+                        &self.db,
+                        self.position_encoding,
+                        None,
+                    ),
+                })
+                .collect(),
+            origins: export
+                .origins
+                .into_iter()
+                .map(|(line, target)| TypeDeclarationOrigin {
+                    line,
+                    column: 0,
+                    target: location_link_from_navigation_target(
+                        &NavigationTarget::from(target),
+                        &self.db,
+                        self.position_encoding,
+                        None,
+                    ),
+                })
+                .collect(),
+        }))
+    }
+
+    #[wasm_bindgen(js_name = "typeDefinitionsWithTypedDicts")]
+    pub fn type_definitions_with_typed_dicts(
+        &self,
+        file: &FileHandle,
+        position: Position,
+    ) -> Result<Vec<LocationLink>, Error> {
+        let offset = self.file_offset_for_position(file, position)?;
+        let file = self.db.program_file(file.file);
+        let env = ProgramEnvironment::from_file(file);
+        let Some(ty) = ty_ide::inferred_type_at(&self.db, file, offset) else {
+            return Ok(Vec::new());
+        };
+        Ok(
+            ty_python_semantic::types::ide_support::type_definitions_with_typed_dicts(
+                &self.db, &env, ty,
+            )
+            .into_iter()
+            .map(|target| {
+                location_link_from_navigation_target(
+                    &NavigationTarget::from(target),
+                    &self.db,
+                    self.position_encoding,
+                    None,
+                )
+            })
+            .collect(),
+        )
+    }
+
     /// Creates a workspace with options that take precedence over configuration files.
     #[wasm_bindgen(constructor)]
     pub fn new(
@@ -1356,6 +1460,26 @@ impl From<PositionEncoding> for ruff_source_file::PositionEncoding {
             PositionEncoding::Utf32 => Self::Utf32,
         }
     }
+}
+
+#[wasm_bindgen]
+#[derive(Clone)]
+pub struct TypedDictTypeExport {
+    #[wasm_bindgen(getter_with_clone)]
+    pub imports: Vec<TypeDeclarationOrigin>,
+    #[wasm_bindgen(getter_with_clone)]
+    pub source: String,
+    #[wasm_bindgen(getter_with_clone)]
+    pub origins: Vec<TypeDeclarationOrigin>,
+}
+
+#[wasm_bindgen]
+#[derive(Clone)]
+pub struct TypeDeclarationOrigin {
+    pub line: u32,
+    pub column: u32,
+    #[wasm_bindgen(getter_with_clone)]
+    pub target: LocationLink,
 }
 
 #[wasm_bindgen]

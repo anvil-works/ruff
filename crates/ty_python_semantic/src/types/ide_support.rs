@@ -10,6 +10,7 @@ use crate::types::class::{DynamicClassAnchor, DynamicEnumAnchor, DynamicNamedTup
 use crate::types::constraints::ConstraintSetBuilder;
 use crate::types::infer::infer_definition_types;
 use crate::types::signatures::{ParametersKind, Signature};
+use crate::types::typed_dict::{TypedDictField, TypedDictType};
 use crate::types::{
     CallDunderError, ClassBase, ClassLiteral, KnownClass, KnownFunction, KnownUnion,
     PropertyAccessorRole, Type, TypeContext, TypeVarBoundOrConstraints, binding_type,
@@ -26,6 +27,8 @@ use ty_module_resolver::{ImportingFile, Module, ResolverFile};
 use ty_python_core::definition::{Definition, DefinitionKind};
 use ty_python_core::{ProgramFile, attribute_scopes, semantic_index, use_def_map};
 
+mod type_declaration;
+pub use type_declaration::{export_typed_dict_type, type_definitions_with_typed_dicts};
 mod unreachable_code;
 #[path = "ide_support/unused_bindings.rs"]
 mod unused_binding_support;
@@ -833,10 +836,41 @@ pub fn typed_dict_key_definition<'db>(
     key: &str,
 ) -> Option<ResolvedDefinition<'db>> {
     let value_ty = subscript.value.inferred_type(model)?;
-    let typed_dict = value_ty.as_typed_dict()?;
-    let field = typed_dict.items(model.db()).get(key)?;
-    let definition = field.first_declaration()?;
-    Some(ResolvedDefinition::Definition(definition))
+    let schema = value_ty.as_typed_dict()?;
+    let field = schema.items(model.db()).get(key)?;
+    typed_dict_field_definition(model.db(), schema, key, field)
+}
+
+fn typed_dict_field_definition<'db>(
+    db: &'db dyn Db,
+    schema: TypedDictType<'db>,
+    key: &str,
+    field: &TypedDictField<'db>,
+) -> Option<ResolvedDefinition<'db>> {
+    if let Some(definition) = field.first_declaration() {
+        return Some(ResolvedDefinition::Definition(definition));
+    }
+    // In the functional declaration, the field name is a string expression
+    // inside the defining dictionary and has no separate symbol definition.
+    schema.defining_class()?.iter_mro(db).find_map(|base| {
+        let ClassLiteral::DynamicTypedDict(class) = base.into_class()?.class_literal(db) else {
+            return None;
+        };
+        let definition = class.definition(db)?;
+        let parsed = parsed_module(db, definition.python_file(db)).load(db);
+        let call = definition.kind(db).value(&parsed)?.as_call_expr()?;
+        let fields = call.arguments.args.get(1)?.as_dict_expr()?;
+        let literal = fields
+            .items
+            .iter()
+            .rev()
+            .filter_map(|item| item.key.as_ref()?.as_string_literal_expr())
+            .find(|literal| literal.value.to_str() == key)?;
+        Some(ResolvedDefinition::FileWithRange(FileRange::new(
+            definition.file(db),
+            literal.range(),
+        )))
+    })
 }
 
 pub fn typed_dict_key_hover<'db>(

@@ -808,3 +808,19 @@ mod tests {
         fn into_diagnostic(self) -> Diagnostic;
     }
 }
+
+/// Read the inferred expression type at an editor position.
+pub fn inferred_type_at<'db>(
+    db: &'db dyn Db,
+    file: ty_python_core::ProgramFile<'db>,
+    offset: ruff_text_size::TextSize,
+) -> Option<Type<'db>> {
+    let model = ty_python_semantic::SemanticModel::new(db, file);
+    let parsed = ruff_db::parsed::parsed_module(db, file.python_file(db)).load(db);
+    let target = goto::find_goto_target(&model, &parsed, offset)?;
+    if let goto::GotoTarget::Call { call, .. } = target {
+        ty_python_semantic::HasType::inferred_type(call, &model)
+    } else {
+        target.inferred_type(&model)
+    }
+}

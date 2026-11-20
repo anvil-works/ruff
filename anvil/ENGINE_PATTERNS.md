@@ -91,6 +91,19 @@ Generic WASM API extensions expose existing engine behaviour:
     invalidation, so probing several calls does not repeatedly scan the file.
     The adapter uses existing parsed call ranges to skip this proof for attribute
     calls, which still use ordinary API resolution.
+- `Workspace.exportTypedDictType` reads the inferred type and emits a private
+    declaration for a type containing a TypedDict. It uses annotation rendering
+    with opt-in full spans for TypedDicts and type aliases. The caller supplies
+    which non-vendored names may be imported in the receiving program and
+    verifies their definitions against the original locations. Generated import
+    positions are zero-based UTF-16 coordinates. Unrepresentable fields can be
+    gradual while their containing schema retains its keys. The exporter and
+    navigation calls do not modify source or inference rules.
+- `Workspace.typeDefinitionsWithTypedDicts` follows TypedDict arguments inside
+    collections and retains the ordinary definitions of other union alternatives.
+    The browser uses this result for projected types, mapping the private
+    declarations back to their original source. Functional TypedDict string
+    keys also supply definition ranges through ordinary Ty navigation.
 
 These do not change inference rules. Keep these API extensions separate from Anvil
 compatibility logic and remove each local difference when an equivalent upstream

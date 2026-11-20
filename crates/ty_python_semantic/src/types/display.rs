@@ -159,6 +159,8 @@ pub struct DisplaySettings<'db> {
     hide_return_type: bool,
     /// Preserve type policies when producing an annotation to insert into Python source.
     for_type_annotation: bool,
+    /// Include the complete expression ranges of replaceable named types.
+    include_annotation_spans: bool,
 }
 
 impl<'db> DisplaySettings<'db> {
@@ -775,6 +777,11 @@ impl<'db> DisplayType<'_, 'db> {
     #[must_use]
     pub fn for_type_annotation(mut self) -> Self {
         self.settings.for_type_annotation = true;
+        self
+    }
+
+    pub(crate) fn with_annotation_spans(mut self) -> Self {
+        self.settings.include_annotation_spans = true;
         self
     }
 
@@ -1781,14 +1788,23 @@ impl<'db> FmtDetailed<'db> for DisplayRepresentation<'_, 'db> {
                     .fmt_detailed(f)?;
                 f.write_char(']')
             }
-            Type::TypedDict(TypedDictType::Class(defining_class)) => match defining_class {
-                ClassType::NonGeneric(class) => class
-                    .display_with(db, self.settings.clone())
-                    .fmt_detailed(f),
-                ClassType::Generic(alias) => alias
-                    .display_with(db, self.env, self.settings.clone())
-                    .fmt_detailed(f),
-            },
+            Type::TypedDict(TypedDictType::Class(defining_class)) => {
+                let mut span;
+                let f = if self.settings.include_annotation_spans {
+                    span = f.with_type(self.ty);
+                    &mut *span
+                } else {
+                    f
+                };
+                match defining_class {
+                    ClassType::NonGeneric(class) => class
+                        .display_with(db, self.settings.clone())
+                        .fmt_detailed(f),
+                    ClassType::Generic(alias) => alias
+                        .display_with(db, self.env, self.settings.clone())
+                        .fmt_detailed(f),
+                }
+            }
             Type::TypedDict(TypedDictType::Synthesized(synthesized)) => {
                 f.set_invalid_type_annotation();
                 f.write_char('<')?;
@@ -1807,14 +1823,23 @@ impl<'db> FmtDetailed<'db> for DisplayRepresentation<'_, 'db> {
                 }
                 f.write_char('>')
             }
-            Type::TypeAlias(alias) => alias
-                .display_with(db, self.settings.clone())
-                .fmt_specialized(
-                    self.env,
-                    alias.specialization(db),
-                    alias.materialization_kind(db),
-                    f,
-                ),
+            Type::TypeAlias(alias) => {
+                let mut span;
+                let f = if self.settings.include_annotation_spans {
+                    span = f.with_type(self.ty);
+                    &mut *span
+                } else {
+                    f
+                };
+                alias
+                    .display_with(db, self.settings.clone())
+                    .fmt_specialized(
+                        self.env,
+                        alias.specialization(db),
+                        alias.materialization_kind(db),
+                        f,
+                    )
+            }
             Type::Recursive(recursive) => TypeAliasDisplay {
                 db,
                 ty: self.ty,

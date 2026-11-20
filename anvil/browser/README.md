@@ -337,10 +337,15 @@ RPC/task result declarations come from ty's machine-readable annotation edits on
 small inference functions. Each export gets an isolated type-alias module and
 literal-name overloads in `anvil.server`; task results flow through
 `BackgroundTaskState[T].get_return_value()`. Server bodies stay in the server
-namespace. A result with unavailable or different client import identities keeps
-`Any`. Inference does not supply concrete call arguments, and unsupported types
-or ambiguous names keep the broad fallback. Source/metadata updates discard both
-these declarations and inferred Form items; context-only edits reuse them.
+namespace. A result whose type is already visible in the client uses that type.
+A server-only TypedDict can be represented by a private declaration with field
+types and source locations. The worker checks that imports in this declaration
+still resolve to the server's original definitions. A field with an unsupported
+type can remain `Any`, including recursive fields. If the declaration cannot be
+validated, the result remains gradual. The client import rules stay separate
+from this declaration transfer. Inference does not supply concrete call
+arguments, and ambiguous names keep the broad fallback. Source and metadata
+updates invalidate affected declarations. Context-only edits reuse them.
 
 Unique literal `call`/`call_s` registrations also expose portable parameter
 contracts for signature help, native argument diagnostics and keyword completion.

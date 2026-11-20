@@ -333,9 +333,10 @@ function prepareApp(server = isServer, inferredItems = inferredFormItems) {
     ]);
     if (formClasses.size) next.set(`${prepared.roots[0]}/${itemTypeModule}.pyi`, itemDeclarationSource(inferredItems?.declarations ?? []));
     if (remoteTypes?.length) {
-        for (const entry of rpcDeclarations()) next.set(`${prepared.roots[0]}/${entry.module}.pyi`, entry.source);
+        for (const entry of rpcDeclarations()) next.set(`${prepared.roots[0]}/${entry.module}.pyi`, server ? entry.source : entry.clientDeclaration?.source ?? entry.source);
         const path = `${root}/.anvil/types/${server ? 'server' : 'client'}/anvil/server.pyi`;
-        next.set(path, rpcServerStub(next.get(path), JSON.stringify(remoteTypes)));
+        const registrations = remoteTypes.map(({ name, kind, module }) => ({ name, kind, module }));
+        next.set(path, rpcServerStub(next.get(path), JSON.stringify(registrations)));
     }
     sourceMaps = new Map();
     for (const [original, plan] of handlerPlans ?? []) {
@@ -953,11 +954,18 @@ function ensureFormItems() {
     }
 }
 
+function rpcTypeTargets(handle, position) {
+    return locations(workspace.gotoDefinition(handle, new ty.Position(position.line + 1, position.character + 1)))
+        .map(rpcTypeIdentity).sort();
+}
+
+function rpcTypeIdentity(target) {
+    return [target.uri.replace(/\/\.anvil\/types\/(client|server)\//, '/.anvil/types/runtime/'), selectedName(target)];
+}
+
 function rpcTypeImports(entry) {
-    const handle = handles.get(`${JSON.parse(preparedRootsJson)[0]}/${entry.module}.pyi`);
-    return JSON.stringify(entry.imports.map(position =>
-        locations(workspace.gotoDefinition(handle, new ty.Position(position.line + 1, position.character + 1)))
-            .map(target => [target.uri.replace(/\/\.anvil\/types\/(client|server)\//, '/.anvil/types/runtime/'), selectedName(target)]).sort()));
+    const handle = fileHandleForRpcType(entry);
+    return JSON.stringify(entry.imports.map(position => rpcTypeTargets(handle, position)));
 }
 
 function rpcDeclarations() {
@@ -965,20 +973,102 @@ function rpcDeclarations() {
 }
 
 // Export declarations are mounted in isolated modules in either runtime.
-function checkRpcTypes(entries) {
+function checkRpcTypes(entries, exportsByEntry) {
     prepareApp(true);
     const serverImports = new Map(entries.map(entry => [entry.module, rpcTypeImports(entry)]));
     prepareApp(false);
-    // A server-local class may have no client declaration. Keep a gradual
-    // result for that export rather than exposing server code to clients.
-    for (const entry of entries) {
-        const handle = handles.get(`${JSON.parse(preparedRootsJson)[0]}/${entry.module}.pyi`);
-        const diagnostics = workspace.checkFile(handle);
-        const unavailable = diagnostics.some(diagnostic => diagnostic.severity() >= ty.Severity.Error);
-        for (const diagnostic of diagnostics) diagnostic.free();
-        if (unavailable || serverImports.get(entry.module) !== rpcTypeImports(entry))
-            entry.source = 'from typing import Any, TypeAlias\n_Result: TypeAlias = Any\n';
+    const needsClientDeclaration = entries.filter(entry => {
+        const handle = fileHandleForRpcType(entry);
+        return hasTypeErrors(handle) || serverImports.get(entry.module) !== rpcTypeImports(entry);
+    });
+
+    // Keep the existing declaration when its imports agree. Copy server-only
+    // schemas into a private client stub and check their remaining imports.
+    const candidates = needsClientDeclaration.filter(entry => exportsByEntry?.has(entry));
+    for (const entry of candidates) {
+        const { source, origins } = exportsByEntry.get(entry);
+        entry.clientDeclaration = { source, origins };
     }
+    if (candidates.length) {
+        prepareApp(false);
+        for (const entry of candidates) {
+            const handle = fileHandleForRpcType(entry);
+            if (hasTypeErrors(handle) || exportsByEntry.get(entry).imports.some(({ position, identity }) =>
+                JSON.stringify(rpcTypeTargets(handle, position)) !== identity)) {
+                delete entry.clientDeclaration;
+            }
+        }
+    }
+    for (const entry of needsClientDeclaration) {
+        if (!entry.clientDeclaration) entry.source = 'from typing import Any, TypeAlias\n_Result: TypeAlias = Any\n';
+    }
+}
+
+function fileHandleForRpcType(entry) {
+    return handles.get(`${JSON.parse(preparedRootsJson)[0]}/${entry.module}.pyi`);
+}
+
+function hasTypeErrors(handle) {
+    const diagnostics = workspace.checkFile(handle);
+    try {
+        return diagnostics.some(diagnostic => diagnostic.severity() >= ty.Severity.Error);
+    } finally {
+        for (const diagnostic of diagnostics) diagnostic.free();
+    }
+}
+
+function canImportRpcType(path, name) {
+    if (sourceEnvironments.get(origins.get(path) ?? path) === false) return true;
+
+    const serverTypes = `${root}/.anvil/types/server/`;
+    if (!path.startsWith(serverTypes + 'anvil/')) return false;
+    // A module may exist on both sides and still contain server-only classes.
+    // Screen those out before exporting, then validate shared imports with Ty.
+    const clientPath = `${root}/.anvil/types/client/${path.slice(serverTypes.length)}`;
+    const stub = preparedViews.get(false)?.prepared.files[clientPath] ??
+        runtimeWorkspaces.get(false)?.mounted.get(clientPath);
+    return stub !== undefined && JSON.parse(symbols(stub)).some(symbol => !symbol.containerName && symbol.name === name);
+}
+
+function readTypedDictExport(exported) {
+    if (!exported) return undefined;
+    try {
+        const origins = new Map();
+        for (const origin of exported.origins) {
+            try {
+                const [target] = locations([origin.target]);
+                if (target) origins.set(origin.line, target);
+            } finally { origin.free(); }
+        }
+        const imports = exported.imports.map(imported => {
+            try {
+                const identity = JSON.stringify(locations([imported.target]).map(rpcTypeIdentity));
+                return { position: { line: imported.line, character: imported.column }, identity };
+            } finally { imported.free(); }
+        });
+        return { source: exported.source, origins, imports };
+    } finally { exported.free(); }
+}
+
+function projectedRpcEntry(target) {
+    if (isServer || !target.uri.startsWith('file:')) return;
+    const path = pathForUri(target.uri);
+    const base = JSON.parse(preparedRootsJson)[0];
+    if (!path.startsWith(base + '/_anvil_rpc_return_')) return;
+    return remoteTypes?.find(entry => entry.clientDeclaration && path === base + '/' + entry.module + '.pyi');
+}
+
+function rpcNavigationTargets(targets, requireClientDeclaration = false) {
+    const result = new Map();
+    let mapped = false;
+    for (const target of targets) {
+        const entry = projectedRpcEntry(target);
+        const resolved = entry ? entry.clientDeclaration.origins.get(target.range.start.line) : target;
+        if (!resolved) continue;
+        mapped ||= Boolean(entry);
+        result.set(JSON.stringify(resolved), resolved);
+    }
+    return requireClientDeclaration && !mapped ? [] : [...result.values()];
 }
 
 function missingRpcTypes(entries, needed) {
@@ -997,6 +1087,7 @@ function ensureRemoteTypes(needed) {
         missing ??= missingRpcTypes(registrations().inferable, needed);
         if (!missing.length) return;
         const inferred = [];
+        const exportsByEntry = new Map();
         const base = JSON.parse(preparedRootsJson)[0];
         for (const entry of missing) {
             const canonical = projections.get(pathForUri(entry.uri));
@@ -1007,12 +1098,19 @@ function ensureRemoteTypes(needed) {
             const handle = workspace.openFile(path, source);
             try {
                 const type = { name: entry.name, kind: entry.kind, module, ...annotatedResult(source, handle) };
+                const lines = source.split('\n');
+                const line = lines.length - 2;
+                const expression = entry.isAsync ? 'await' : '_anvil_target';
+                const exported = readTypedDictExport(workspace.exportTypedDictType(handle, new ty.Position(
+                    line + 1, lines[line].indexOf(expression) + 2,
+                ), canImportRpcType));
+                if (exported) exportsByEntry.set(type, exported);
                 inferred.push(type);
                 remoteTypes.push(type);
             } finally { workspace.closeFile(handle); }
         }
         rpcConsumers.clear();
-        checkRpcTypes(inferred);
+        checkRpcTypes(inferred, exportsByEntry);
         remoteInputs ??= new Set();
         for (const path of registrationInputs) remoteInputs.add(path);
         for (const path of sourceInputs(rpcDeclarations().map(entry => `${JSON.parse(preparedRootsJson)[0]}/${entry.module}.pyi`))) remoteInputs.add(path);
@@ -1045,7 +1143,8 @@ function ensureRpcContracts(calls) {
             if (!entry.contract) continue;
             withTemporarySources(snapshot => {
                 snapshot.replace(canonical, source + entry.contract.probeSource);
-                if (entry.contract.resultProbe) {
+                // A validated client schema already records the declared return type.
+                if (entry.contract.resultProbe && !entry.clientDeclaration) {
                     Object.assign(entry, infer(owner, entry.contract.resultProbe, entry.module));
                     types.push(entry);
                 }
@@ -1057,8 +1156,12 @@ function ensureRpcContracts(calls) {
         rpcConsumers.clear();
         checkRpcTypes(types);
         for (const path of sourceInputs(types.map(entry => `${JSON.parse(preparedRootsJson)[0]}/${entry.module}.pyi`))) remoteInputs.add(path);
-        for (const entry of entries) if (entry.contract) entry.source += entry.parameters.map(parameter =>
-            `from ${parameter.module} import _Result as ${parameter.name}\n`).join('') + entry.contract.declaration;
+        for (const entry of entries) if (entry.contract) {
+            const signature = entry.parameters.map(parameter =>
+                `from ${parameter.module} import _Result as ${parameter.name}\n`).join('') + entry.contract.declaration;
+            entry.source += signature;
+            if (entry.clientDeclaration) entry.clientDeclaration.source += signature;
+        }
     } finally { prepareApp(environment); }
 }
 
@@ -2163,7 +2266,13 @@ function request(method, params) {
     const handle = fileHandle(uri);
     const path = handle.path();
     if (method === 'textDocument/typeDefinition') {
-        return locations(workspace.gotoTypeDefinition(handle, queryPosition(handle, params.position)));
+        if (!isServer && remoteTypes?.some(entry => entry.clientDeclaration)) {
+            const projected = rpcNavigationTargets(locations(workspace.typeDefinitionsWithTypedDicts(
+                handle, queryPosition(handle, params.position),
+            )), true);
+            if (projected.length) return projected;
+        }
+        return rpcNavigationTargets(locations(workspace.gotoTypeDefinition(handle, queryPosition(handle, params.position))));
     }
     if (method === 'textDocument/inlayHint') {
         const hints = workspace.inlayHints(handle, new ty.Range(queryPosition(handle, params.range.start), queryPosition(handle, params.range.end)));
@@ -2386,7 +2495,7 @@ function request(method, params) {
         if (remote) return remote.map(({ uri, range }) => ({ uri, range }));
         selectEnvironment(params.textDocument.uri);
         const target = fileHandle(params.textDocument.uri);
-        const definitions = locations(workspace.gotoDefinition(target, queryPosition(target, params.position)));
+        const definitions = rpcNavigationTargets(locations(workspace.gotoDefinition(target, queryPosition(target, params.position))));
         if (definitions.length) return definitions;
         const position = sourceMaps.get(target.path())?.position(params.position) ?? params.position;
         const form = formDefinition(target, position);
@@ -2441,6 +2550,8 @@ function request(method, params) {
                 let module = importModule;
                 if (!module && item.kind === ty.CompletionKind.Module && (fromImport || absoluteImport))
                     module = modulePrefix ? `${modulePrefix}.${item.name}` : item.name;
+                if (module?.startsWith('_anvil_rpc_return_') &&
+                    rpcDeclarations().some(entry => entry.module === module)) return [];
                 if (!isServer && sourceEnvironments.size && module && !clientRuntime.moduleSupported(module)) return [];
                 if (generatedBindings.has(JSON.stringify([item.name, item.detail])) || constructor && item.name === 'form=' ||
                     hideDeletion && item.name === 'delete_all_rows' || hideSelfDeletion && item.name === 'self.delete_all_rows') return [];
