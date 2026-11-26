@@ -349,11 +349,12 @@ impl Preparation {
                 .get(&format!("{root}/.anvil/client-tests.json"))
                 .map(String::as_str)
                 == Some("true");
+        let env_prefix = format!("{environment}/");
         let mut selected_stubs: BTreeMap<&str, &str> = self
             .api_stubs
             .iter()
             .filter_map(|(path, text)| {
-                path.strip_prefix(&format!("{environment}/"))
+                path.strip_prefix(&env_prefix)
                     .map(|rel| (rel, text.as_str()))
             })
             .collect();

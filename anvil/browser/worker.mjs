@@ -254,17 +254,16 @@ function privateModule(name) {
 
 // pytest's default import mode adds each test's outermost package parent.
 // Keep existing __init__.py boundaries; tests are not part of the app package.
-function testImportRoots(current, directory) {
+function testImportRoots(current) {
     const roots = new Set();
-    const prefix = `${root}/tests/${directory}`;
-    if (current.has(`${prefix}/__init__.py`)) roots.add(`${root}/tests`);
+    if (current.has(`${root}/tests/server_tests/__init__.py`)) roots.add(`${root}/tests`);
     for (const path of current.keys()) {
-        if (!path.startsWith(`${prefix}/`) || !path.endsWith('.py')) continue;
+        if (!path.startsWith(`${root}/tests/server_tests/`) || !path.endsWith('.py')) continue;
         const filename = path.slice(path.lastIndexOf('/') + 1);
         if (filename !== 'conftest.py' && !/^test_.*\.py$/.test(filename) && !filename.endsWith('_test.py')) continue;
-        let currentDir = path.slice(0, path.lastIndexOf('/'));
-        while (current.has(`${currentDir}/__init__.py`)) currentDir = currentDir.slice(0, currentDir.lastIndexOf('/'));
-        roots.add(currentDir);
+        let directory = path.slice(0, path.lastIndexOf('/'));
+        while (current.has(`${directory}/__init__.py`)) directory = directory.slice(0, directory.lastIndexOf('/'));
+        roots.add(directory);
     }
     return [...roots];
 }
@@ -386,11 +385,9 @@ function prepareApp(server = isServer, inferredItems = inferredFormItems) {
         const lines = text.split(/\r\n|\r|\n/);
         return [[path, { line: lines.length - 1, character: lines.at(-1).length }]];
     }));
-    const searchRoots = [
-        ...prepared.roots,
-        ...(server && hasServerTests ? testImportRoots(current, 'server_tests') : []),
-        ...(!server && hasClientTests ? testImportRoots(current, 'client_tests') : []),
-    ];
+    // Client tests load as standalone modules in skulpt-pytest rather than on sys.path,
+    // so only server tests add pytest's package-parent import roots.
+    const searchRoots = [...prepared.roots, ...(server && hasServerTests ? testImportRoots(current) : [])];
     const roots = JSON.stringify(searchRoots);
     const directories = new Set();
     for (const path of next.keys()) {
@@ -445,6 +442,7 @@ function environmentFor(uri) {
 // synchronous. A later query can retry a failed fetch.
 function availablePacks(server) {
     if (!server) {
+        // Client-test sessions also mount the bundled pytest server pack under client/.
         const includePytest = files.get(`${root}/.anvil/client-tests.json`) === 'true';
         return stubPacks.filter(pack => !pack.server || (includePytest && pack.id === 'pytest'));
     }
@@ -460,6 +458,7 @@ function availablePacks(server) {
 }
 
 function packForPath(path) {
+    // Match against the path's runtime rather than pack.server because pytest mounts under client/ in client-test sessions.
     const server = path.includes('/.anvil/types/server/');
     return availablePacks(server).find(pack => pack.modules.some(module =>
         path.startsWith(`${root}/.anvil/types/${server ? 'server' : 'client'}/${module}/`)));

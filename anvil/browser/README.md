@@ -56,24 +56,27 @@ the selected environment catalogue's bundled requirements. These participate in
 selection alongside app constraints; absent catalogue metadata does not imply that
 an arbitrary base image contains these libraries.
 
-A test analysis session supplies `.anvil/server-tests.json` containing `true`,
-the Python files in `tests/server_tests/`, and that directory's `requirements.txt`,
-or `.anvil/client-tests.json` containing `true` and the Python files in
-`tests/client_tests/`. These remain ordinary Python test modules, outside the
-app's package. Server-test queries add pytest's package-parent import roots,
-respecting stored initialisers, and include test requirements in optional
-library selection; client queries exclude `tests/server_tests/`. Client-test
-queries run in the client/Skulpt environment, add pytest's package-parent import
-roots for `tests/client_tests/`, overlay any `client-tests/` entries from the
-API stubs asset onto `client/` (preserving service-derived declarations such as
-configured `users` row types), and expose the bundled `pytest` typing pack
-without requiring a `requirements.txt`; server queries exclude
-`tests/client_tests/`. The IDE owns separate lazy sessions for these
-environments, so test-only files and requirements cannot change ordinary app
-completion. The pytest pack uses upstream typed source; fixture-parameter
-name/type inference is separate. Import-root discovery covers the default
-`test_*.py` / `*_test.py` patterns and `conftest.py`. Custom pytest collection
-patterns and import modes are not modelled.
+Test analysis sessions run in separate lazy IDE sessions so test-only files,
+stubs, and requirements cannot change ordinary app completion:
+
+- **Server tests** supply `.anvil/server-tests.json` containing `true`, the
+  Python files in `tests/server_tests/`, and that directory's `requirements.txt`.
+  Queries add pytest's package-parent import roots (respecting stored
+  initialisers for `test_*.py`, `*_test.py`, and `conftest.py`; custom pytest
+  collection patterns and import modes are not modelled) and include test
+  requirements in optional library selection; client queries exclude
+  `tests/server_tests/`.
+- **Client tests** supply `.anvil/client-tests.json` containing `true` and the
+  Python files in `tests/client_tests/`. Queries run in the client/Skulpt
+  environment, overlay any `client-tests/` entries from the API stubs asset onto
+  `client/` (preserving service-derived declarations such as configured `users`
+  row types), and expose the bundled `pytest` typing pack without requiring a
+  `requirements.txt`; server queries exclude `tests/client_tests/`. Because
+  `skulpt-pytest` loads client test files as standalone modules, client-test
+  sessions do not add `tests/client_tests/` package-parent import roots.
+
+The pytest pack uses upstream typed source; fixture-parameter name/type
+inference is separate.
 
 These profiles target current dynamic downlinks. NumPy supplies matching
 declarations; pandas uses the public pandas-stubs 3.0.5.260914 source, with common
