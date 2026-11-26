@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { readFile } from 'node:fs/promises';
 import { test } from 'node:test';
 import { withBrowser } from './browser.mjs';
 
@@ -145,4 +146,77 @@ test('pytest is supported as a Skulpt module in client tests without enabling it
     assert(result.tests.definitions.some(location => location.uri.includes('/_pytest/raises.py')));
     assert(result.tests.source?.readOnly);
     assert(result.tests.source?.text.includes('def raises('));
+}));
+
+test('client-tests API stub overlays expose PRIVILEGED and force_login with user row types only in client tests', () => withBrowser(async page => {
+    const baseStubs = JSON.parse(await readFile(new URL('../dist/api-stubs.json', import.meta.url), 'utf8'));
+    const overlayFiles = {
+        ...baseStubs.files,
+        'client-tests/anvil/testing/__init__.pyi': 'class _PrivilegedContext:\n    def __enter__(self) -> "_PrivilegedContext": ...\n    def __exit__(self, *args) -> bool: ...\nPRIVILEGED: _PrivilegedContext\n',
+        'client-tests/anvil/users/__init__.pyi': `${baseStubs.files['client/anvil/users/__init__.pyi']}\ndef force_login(user_row: Row, remember: bool = False) -> Row | None: ...\n`,
+    };
+    delete overlayFiles['client/anvil/testing/__init__.pyi'];
+    await page.context().route('**/client-test-stubs.json', route => route.fulfill({
+        contentType: 'application/json',
+        body: JSON.stringify({ ...baseStubs, files: overlayFiles }),
+    }));
+    const result = await page.evaluate(async () => {
+        const { BrowserAnalysisSession } = await import('/session.mjs');
+        const anvilYaml = JSON.stringify({
+            package_name: 'Main',
+            services: [{ source: '/runtime/services/anvil/users.yml', server_config: { user_table: 'users' } }],
+            db_schema: {
+                users: {
+                    python_name: 'users',
+                    columns: [{ name: 'email', type: 'string' }, { name: 'role_tag', type: 'string' }],
+                },
+            },
+        });
+        async function inspect(isClientTest) {
+            const rootUri = isClientTest ? 'file:///client-tests' : 'file:///app';
+            const root = isClientTest ? '/client-tests' : '/app';
+            const uri = isClientTest
+                ? 'file:///client-tests/tests/client_tests/test_auth.py'
+                : 'file:///app/client_code/main.py';
+            const files = {
+                [`${root}/anvil.yaml`]: anvilYaml,
+                [`${root}/client_code/__init__.py`]: '',
+                [`${root}/server_code/__init__.py`]: '',
+                ...(isClientTest ? {
+                    [`${root}/.anvil/client-tests.json`]: 'true',
+                    [`${root}/tests/client_tests/__init__.py`]: '',
+                } : {}),
+                [new URL(uri).pathname]: 'import anvil.users\nanvil.users.\n',
+            };
+            const session = new BrowserAnalysisSession({
+                workerUrl: '/worker.mjs',
+                rootUri,
+                apiStubsUrl: '/client-test-stubs.json',
+                files,
+            });
+            const complete = async (line, character) => (await session.query('textDocument/completion', {
+                textDocument: { uri }, position: { line, character }, context: { autoImport: false },
+            })).result.items.map(item => item.label);
+            try {
+                const usersMembers = await complete(1, 12);
+                await session.changeDocument(uri, 'import anvil.testing\nanvil.testing.\n');
+                const testingMembers = await complete(1, 14);
+                let forcedRowKeys = [];
+                if (isClientTest) {
+                    await session.changeDocument(
+                        uri,
+                        'import anvil.testing\nimport anvil.users\nfrom anvil.tables import app_tables\nwith anvil.testing.PRIVILEGED:\n    row = app_tables.users.get(email="a@b.com")\n    assert row is not None\n    logged_in = anvil.users.force_login(row)\n    assert logged_in is not None\n    logged_in["\n',
+                    );
+                    forcedRowKeys = await complete(8, 15);
+                }
+                return { usersMembers, testingMembers, forcedRowKeys };
+            } finally { session.dispose(); }
+        }
+        return { normal: await inspect(false), tests: await inspect(true) };
+    });
+    assert(!result.normal.usersMembers.includes('force_login'), 'normal client code must not see force_login');
+    assert(!result.normal.testingMembers.includes('PRIVILEGED'), 'normal client code must not see PRIVILEGED');
+    assert(result.tests.usersMembers.includes('force_login'), 'client tests must see force_login');
+    assert(result.tests.testingMembers.includes('PRIVILEGED'), 'client tests must see PRIVILEGED');
+    assert(result.tests.forcedRowKeys.some(label => label.includes('role_tag')), `force_login should preserve configured user row keys: ${JSON.stringify(result.tests.forcedRowKeys)}`);
 }));

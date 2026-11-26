@@ -344,21 +344,39 @@ impl Preparation {
             .api_stubs
             .get("client/anvil/__init__.pyi")
             .context("client/anvil/__init__.pyi is missing from Anvil API stubs")?;
-        for (path, text) in &self.api_stubs {
-            if let Some(path) = path.strip_prefix(&format!("{environment}/")) {
-                let text = match path {
-                    "anvil/tables/__init__.pyi" => {
-                        tables::stub(&apps[0].1["db_schema"], text, &main_models, environment)?
-                    }
-                    "anvil/users/__init__.pyi" => {
-                        crate::services::users(&apps[0].1, text, &main_models, environment)?
-                    }
-                    "anvil/google/drive.pyi" => crate::services::drive(&apps[0].1, text)?,
-                    _ => None,
+        let client_tests = environment == "client"
+            && files
+                .get(&format!("{root}/.anvil/client-tests.json"))
+                .map(String::as_str)
+                == Some("true");
+        let mut selected_stubs: BTreeMap<&str, &str> = self
+            .api_stubs
+            .iter()
+            .filter_map(|(path, text)| {
+                path.strip_prefix(&format!("{environment}/"))
+                    .map(|rel| (rel, text.as_str()))
+            })
+            .collect();
+        if client_tests {
+            for (path, text) in &self.api_stubs {
+                if let Some(rel) = path.strip_prefix("client-tests/") {
+                    selected_stubs.insert(rel, text.as_str());
                 }
-                .unwrap_or_else(|| text.to_owned());
-                projected.insert(format!("{api_root}/{path}"), text);
             }
+        }
+        for (path, text) in selected_stubs {
+            let text = match path {
+                "anvil/tables/__init__.pyi" => {
+                    tables::stub(&apps[0].1["db_schema"], text, &main_models, environment)?
+                }
+                "anvil/users/__init__.pyi" => {
+                    crate::services::users(&apps[0].1, text, &main_models, environment)?
+                }
+                "anvil/google/drive.pyi" => crate::services::drive(&apps[0].1, text)?,
+                _ => None,
+            }
+            .unwrap_or_else(|| text.to_owned());
+            projected.insert(format!("{api_root}/{path}"), text);
         }
         let mut component_api = None;
         for (app, config) in &apps {

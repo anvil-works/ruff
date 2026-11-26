@@ -64,7 +64,9 @@ app's package. Server-test queries add pytest's package-parent import roots,
 respecting stored initialisers, and include test requirements in optional
 library selection; client queries exclude `tests/server_tests/`. Client-test
 queries run in the client/Skulpt environment, add pytest's package-parent import
-roots for `tests/client_tests/`, and expose the bundled `pytest` typing pack
+roots for `tests/client_tests/`, overlay any `client-tests/` entries from the
+API stubs asset onto `client/` (preserving service-derived declarations such as
+configured `users` row types), and expose the bundled `pytest` typing pack
 without requiring a `requirements.txt`; server queries exclude
 `tests/client_tests/`. The IDE owns separate lazy sessions for these
 environments, so test-only files and requirements cannot change ordinary app
