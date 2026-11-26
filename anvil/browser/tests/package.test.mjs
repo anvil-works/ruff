@@ -86,6 +86,24 @@ test('an installed browser package serves real completion and lazy library asset
         });
         assert(pytest.includes('setenv'), 'Installed package includes usable pytest types');
         assert.equal(requests.filter(file => /\/stubs\/pytest-/.test(file)).length, 1);
+        const clientPytest = await page.evaluate(async () => {
+            const uri = 'file:///client-tests/tests/client_tests/test_example.py';
+            const session = new (await import('/session.mjs')).BrowserAnalysisSession({
+                workerUrl: '/worker.mjs', rootUri: 'file:///client-tests', files: {
+                    '/client-tests/anvil.yaml': 'package_name: Main\n',
+                    '/client-tests/client_code/__init__.py': '',
+                    '/client-tests/server_code/__init__.py': '',
+                    '/client-tests/.anvil/client-tests.json': 'true',
+                    '/client-tests/tests/client_tests/__init__.py': '',
+                    [new URL(uri).pathname]: 'import pytest\ndef test_patch(patch: pytest.MonkeyPatch):\n    patch.\n',
+                },
+            });
+            try {
+                return (await session.query('textDocument/completion', { textDocument: { uri },
+                    position: { line: 2, character: 10 } })).result.items.map(item => item.label);
+            } finally { session.dispose(); }
+        });
+        assert(clientPytest.includes('setenv'), 'Installed package includes pytest types for client tests');
         assert((await readFile(path.join(installed, 'dist/comlink.LICENSE'))).length > 100);
         assert((await readdir(path.join(installed, 'dist/stubs'))).some(name => /numpy.*\.txt$/.test(name)));
     } finally {

@@ -254,16 +254,17 @@ function privateModule(name) {
 
 // pytest's default import mode adds each test's outermost package parent.
 // Keep existing __init__.py boundaries; tests are not part of the app package.
-function testImportRoots(current) {
+function testImportRoots(current, directory) {
     const roots = new Set();
-    if (current.has(`${root}/tests/server_tests/__init__.py`)) roots.add(`${root}/tests`);
+    const prefix = `${root}/tests/${directory}`;
+    if (current.has(`${prefix}/__init__.py`)) roots.add(`${root}/tests`);
     for (const path of current.keys()) {
-        if (!path.startsWith(`${root}/tests/server_tests/`) || !path.endsWith('.py')) continue;
+        if (!path.startsWith(`${prefix}/`) || !path.endsWith('.py')) continue;
         const filename = path.slice(path.lastIndexOf('/') + 1);
         if (filename !== 'conftest.py' && !/^test_.*\.py$/.test(filename) && !filename.endsWith('_test.py')) continue;
-        let directory = path.slice(0, path.lastIndexOf('/'));
-        while (current.has(`${directory}/__init__.py`)) directory = directory.slice(0, directory.lastIndexOf('/'));
-        roots.add(directory);
+        let currentDir = path.slice(0, path.lastIndexOf('/'));
+        while (current.has(`${currentDir}/__init__.py`)) currentDir = currentDir.slice(0, currentDir.lastIndexOf('/'));
+        roots.add(currentDir);
     }
     return [...roots];
 }
@@ -319,16 +320,24 @@ function prepareApp(server = isServer, inferredItems = inferredFormItems) {
     projections = new Map([...origins].map(([canonical, original]) => [original, canonical]));
     const excluded = new Set(prepared.excludedSources ?? []);
     sourceEnvironments = new Map(Object.entries(prepared.sourceEnvironments ?? {}));
-    if (current.get(`${root}/.anvil/server-tests.json`) === 'true') {
+    const hasServerTests = current.get(`${root}/.anvil/server-tests.json`) === 'true';
+    const hasClientTests = current.get(`${root}/.anvil/client-tests.json`) === 'true';
+    if (hasServerTests) {
         for (const path of current.keys()) {
             if (path.startsWith(`${root}/tests/server_tests/`) && path.endsWith('.py')) sourceEnvironments.set(path, true);
+        }
+    }
+    if (hasClientTests) {
+        for (const path of current.keys()) {
+            if (path.startsWith(`${root}/tests/client_tests/`) && path.endsWith('.py')) sourceEnvironments.set(path, false);
         }
     }
     const next = new Map([
         // Apply config explicitly so invalid TOML cannot leave native discovery
         // holding old rules. The original extra files remain available to readers.
         ...[...current].filter(([path]) => !excluded.has(path) && path !== `${root}/ty.toml` && path !== `${root}/pyproject.toml` &&
-            (server || !path.startsWith(`${root}/tests/server_tests/`))),
+            (server || !path.startsWith(`${root}/tests/server_tests/`)) &&
+            (!server || !path.startsWith(`${root}/tests/client_tests/`))),
         ...preparedFiles,
     ]);
     if (formClasses.size) next.set(`${prepared.roots[0]}/${itemTypeModule}.pyi`, itemDeclarationSource(inferredItems?.declarations ?? []));
@@ -377,7 +386,11 @@ function prepareApp(server = isServer, inferredItems = inferredFormItems) {
         const lines = text.split(/\r\n|\r|\n/);
         return [[path, { line: lines.length - 1, character: lines.at(-1).length }]];
     }));
-    const searchRoots = [...prepared.roots, ...(server && current.get(`${root}/.anvil/server-tests.json`) === 'true' ? testImportRoots(current) : [])];
+    const searchRoots = [
+        ...prepared.roots,
+        ...(server && hasServerTests ? testImportRoots(current, 'server_tests') : []),
+        ...(!server && hasClientTests ? testImportRoots(current, 'client_tests') : []),
+    ];
     const roots = JSON.stringify(searchRoots);
     const directories = new Set();
     for (const path of next.keys()) {
@@ -419,6 +432,7 @@ function environmentFor(uri) {
     if (uri.startsWith('vendored:')) return;
     const path = originalPath(pathForUri(uri));
     if (files.get(`${root}/.anvil/server-tests.json`) === 'true' && path.startsWith(`${root}/tests/server_tests/`)) return true;
+    if (files.get(`${root}/.anvil/client-tests.json`) === 'true' && path.startsWith(`${root}/tests/client_tests/`)) return false;
     let server = sourceEnvironments.get(path);
     for (const environment of ['client', 'server']) {
         if (path.startsWith(`${root}/.anvil/types/${environment}/`) || path.startsWith(`${root}/.anvil/analysis/${environment}/`))
@@ -430,7 +444,10 @@ function environmentFor(uri) {
 // The ordered request queue owns the fetch and mount. Source updates stay
 // synchronous. A later query can retry a failed fetch.
 function availablePacks(server) {
-    if (!server) return stubPacks.filter(pack => !pack.server);
+    if (!server) {
+        const includePytest = files.get(`${root}/.anvil/client-tests.json`) === 'true';
+        return stubPacks.filter(pack => !pack.server || (includePytest && pack.id === 'pytest'));
+    }
     const requirements = [...JSON.parse(files.get(`${root}/.anvil/server-requirements.json`) ?? '[]'),
         appConfigs[root]?.runtime_options?.server_spec?.requirements ?? '',
         files.get(`${root}/.anvil/server-tests.json`) === 'true' ? files.get(`${root}/tests/server_tests/requirements.txt`) ?? '' : ''].join('\n');
@@ -443,8 +460,9 @@ function availablePacks(server) {
 }
 
 function packForPath(path) {
-    return availablePacks(path.includes('/.anvil/types/server/')).find(pack => pack.modules.some(module =>
-        path.startsWith(`${root}/.anvil/types/${pack.server ? 'server' : 'client'}/${module}/`)));
+    const server = path.includes('/.anvil/types/server/');
+    return availablePacks(server).find(pack => pack.modules.some(module =>
+        path.startsWith(`${root}/.anvil/types/${server ? 'server' : 'client'}/${module}/`)));
 }
 
 function hasDesignerPlot() {

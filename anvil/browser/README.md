@@ -57,15 +57,21 @@ selection alongside app constraints; absent catalogue metadata does not imply th
 an arbitrary base image contains these libraries.
 
 A test analysis session supplies `.anvil/server-tests.json` containing `true`,
-the Python files in `tests/server_tests/`, and that directory's `requirements.txt`.
-These remain ordinary Python test modules, outside the app's package. Server
-queries add pytest's package-parent import roots, respecting stored initialisers,
-and include test requirements in optional library selection. Client queries
-exclude the test tree. The IDE owns a separate lazy session for this environment,
-so test-only requirements cannot change ordinary app completion. The pytest pack
-uses upstream typed source; fixture-parameter name/type inference is separate.
-Import-root discovery covers the default `test_*.py` / `*_test.py` patterns and
-`conftest.py`. Custom pytest collection patterns and import modes are not modelled.
+the Python files in `tests/server_tests/`, and that directory's `requirements.txt`,
+or `.anvil/client-tests.json` containing `true` and the Python files in
+`tests/client_tests/`. These remain ordinary Python test modules, outside the
+app's package. Server-test queries add pytest's package-parent import roots,
+respecting stored initialisers, and include test requirements in optional
+library selection; client queries exclude `tests/server_tests/`. Client-test
+queries run in the client/Skulpt environment, add pytest's package-parent import
+roots for `tests/client_tests/`, and expose the bundled `pytest` typing pack
+without requiring a `requirements.txt`; server queries exclude
+`tests/client_tests/`. The IDE owns separate lazy sessions for these
+environments, so test-only files and requirements cannot change ordinary app
+completion. The pytest pack uses upstream typed source; fixture-parameter
+name/type inference is separate. Import-root discovery covers the default
+`test_*.py` / `*_test.py` patterns and `conftest.py`. Custom pytest collection
+patterns and import modes are not modelled.
 
 These profiles target current dynamic downlinks. NumPy supplies matching
 declarations; pandas uses the public pandas-stubs 3.0.5.260914 source, with common
