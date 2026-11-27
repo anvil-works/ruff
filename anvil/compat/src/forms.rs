@@ -891,3 +891,243 @@ fn frontmatter(source: &str) -> Result<(Value, &str)> {
     }
     Ok((json!({}), source))
 }
+
+/// Whether a Form belongs to the main app (eligible for unqualified `open_form`
+/// names) or to a dependency (package-qualified names only).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum FormScope {
+    Main,
+    Dependency,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct OpenFormTarget {
+    pub local_name: Option<String>,
+    /// Canonical module path; also serves as the package-qualified `open_form` name.
+    pub module: String,
+    pub class_name: String,
+}
+
+impl OpenFormTarget {
+    /// Derive an `open_form` target from a client-relative Form source path.
+    /// Runtime `open_form` always calls the module's leaf export, regardless of
+    /// any stale `class_name` recorded in template metadata.
+    pub fn from_relative_path(package: &str, relative: &Path, scope: FormScope) -> Option<Self> {
+        let module = crate::imports::module_name(package, relative);
+        let local_name = module.strip_prefix(&format!("{package}."))?.to_owned();
+        let class_name = local_name.rsplit('.').next()?.to_owned();
+        Some(Self {
+            local_name: (scope == FormScope::Main).then_some(local_name),
+            module,
+            class_name,
+        })
+    }
+}
+
+pub struct OpenFormStubs {
+    pub init_stub: String,
+    pub form_types_stub: String,
+}
+
+/// Choose a collision-free private module name for `open_form` Form imports.
+pub fn open_form_types_module<'a>(packages: impl IntoIterator<Item = &'a str>) -> String {
+    let packages: BTreeSet<&str> = packages.into_iter().collect();
+    let mut name = "_anvil_form_types".to_owned();
+    while packages.contains(name.as_str()) {
+        name.push('_');
+    }
+    name
+}
+
+/// Generate literal-name `open_form` overloads for `client/anvil/__init__.pyi`
+/// and a companion private Form-type import module.
+///
+/// `main_client_modules` lists every app-relative module name under the main
+/// app's `client_code/` (including code-only modules without Designer
+/// templates) so a qualified alias or dependency Form never shadows a local
+/// module that runtime `open_form` resolves first.
+///
+/// Keeping Form imports in a dedicated private module keeps user Form
+/// references and renames out of `anvil/__init__.pyi`.
+pub fn open_form_stubs(
+    base: &str,
+    forms: &[OpenFormTarget],
+    main_client_modules: &BTreeSet<String>,
+    types_module: &str,
+) -> Result<Option<OpenFormStubs>> {
+    if forms.is_empty() {
+        return Ok(None);
+    }
+    let parsed = ruff_python_parser::parse_unchecked_source(
+        base,
+        ruff_python_ast::PySourceType::Stub,
+    );
+    let Some(function) = parsed.syntax().body.iter().find_map(|statement| match statement {
+        Stmt::FunctionDef(function) if function.name.as_str() == "open_form" => Some(function),
+        _ => None,
+    }) else {
+        return Ok(None);
+    };
+    // Compatibility guard for older un-overloaded anvil/__init__.pyi stubs
+    // supplied via ANVIL_API_STUBS_PATH or older browser snapshots; removable
+    // once every supported stub declares `@overload def open_form`.
+    let has_overload = function
+        .decorator_list
+        .iter()
+        .any(|decorator| match &decorator.expression {
+            Expr::Name(name) => name.id.as_str() == "overload",
+            Expr::Attribute(attr) => attr.attr.as_str() == "overload",
+            _ => false,
+        });
+    let valid_forms: Vec<&OpenFormTarget> = forms
+        .iter()
+        .filter(|form| identifier(&form.class_name) && form.module.split('.').all(identifier))
+        .collect();
+    // Match runtime lookup (`open-form.ts`): app-relative names resolve before
+    // package-qualified aliases, so claim every main-app local name first, then
+    // reserve any remaining main-app client modules (e.g. code-only pages) so
+    // dependency Forms or qualified aliases fall back to `Any` instead of
+    // shadowing them.
+    let mut seen_names = BTreeSet::new();
+    let mut claimed: Vec<Vec<&str>> = vec![Vec::new(); valid_forms.len()];
+    for (index, form) in valid_forms.iter().enumerate() {
+        if let Some(local) = form.local_name.as_deref()
+            && seen_names.insert(local)
+        {
+            claimed[index].push(local);
+        }
+    }
+    for local in main_client_modules {
+        seen_names.insert(local.as_str());
+    }
+    for (index, form) in valid_forms.iter().enumerate() {
+        if seen_names.insert(form.module.as_str()) {
+            claimed[index].push(form.module.as_str());
+        }
+    }
+    // PEP 484 treats non-redundant imports in `.pyi` files as private; declare
+    // each Form as a TypeAlias so `anvil/__init__.pyi` can import it cleanly.
+    let mut form_types_stub = String::from("from typing import TypeAlias as _AnvilTypeAlias\n");
+    let mut imports = String::from(
+        "from typing import Any as _AnvilFormAny, Literal as _AnvilFormLiteral, overload as _anvil_form_overload\n",
+    );
+    let mut imported_aliases = Vec::new();
+    let mut overloads = String::new();
+    let mut count = 0usize;
+    for (form, names) in valid_forms.into_iter().zip(claimed) {
+        if names.is_empty() {
+            continue;
+        }
+        let literals = names
+            .iter()
+            .map(|name| serde_json::to_string(name))
+            .collect::<std::result::Result<Vec<_>, _>>()?
+            .join(", ");
+        form_types_stub.push_str(&format!(
+            "from {} import {} as _Imported{count}\n_Form{count}: _AnvilTypeAlias = _Imported{count}\n",
+            form.module, form.class_name
+        ));
+        imported_aliases.push(format!("_Form{count} as _AnvilForm{count}"));
+        overloads.push_str(&format!(
+            "@_anvil_form_overload\ndef open_form(form: _AnvilFormLiteral[{literals}], /, *args: _AnvilFormAny, **kwargs: _AnvilFormAny) -> _AnvilForm{count}: ...\n"
+        ));
+        count += 1;
+    }
+    if count == 0 {
+        return Ok(None);
+    }
+    imports.push_str(&format!(
+        "from {types_module} import ({})\n",
+        imported_aliases.join(", ")
+    ));
+    if !has_overload {
+        overloads.push_str("@_anvil_form_overload\n");
+    }
+    let start = usize::from(function.range().start());
+    let mut init_stub = String::with_capacity(imports.len() + base.len() + overloads.len());
+    init_stub.push_str(&imports);
+    init_stub.push_str(&base[..start]);
+    init_stub.push_str(&overloads);
+    init_stub.push_str(&base[start..]);
+    Ok(Some(OpenFormStubs {
+        init_stub,
+        form_types_stub,
+    }))
+}
+
+#[cfg(test)]
+mod open_form_tests {
+    use super::*;
+
+    #[test]
+    fn from_relative_path_handles_windows_separators_and_leaf_name() {
+        let pkg = OpenFormTarget::from_relative_path(
+            "Main",
+            Path::new(r"Form1\__init__.py"),
+            FormScope::Main,
+        )
+        .unwrap();
+        assert_eq!(pkg.local_name.as_deref(), Some("Form1"));
+        assert_eq!(pkg.module, "Main.Form1");
+        assert_eq!(pkg.class_name, "Form1");
+
+        let nested = OpenFormTarget::from_relative_path(
+            "Library",
+            Path::new(r"Sub\Editor.py"),
+            FormScope::Dependency,
+        )
+        .unwrap();
+        assert_eq!(nested.local_name, None);
+        assert_eq!(nested.module, "Library.Sub.Editor");
+        assert_eq!(nested.class_name, "Editor");
+    }
+
+    #[test]
+    fn app_relative_name_and_code_only_modules_win_over_qualified_aliases() {
+        let top = OpenFormTarget::from_relative_path(
+            "Main",
+            Path::new("Form1/__init__.py"),
+            FormScope::Main,
+        )
+        .unwrap();
+        let nested = OpenFormTarget::from_relative_path(
+            "Main",
+            Path::new("Main/Form1/__init__.py"),
+            FormScope::Main,
+        )
+        .unwrap();
+        let dep = OpenFormTarget::from_relative_path(
+            "Library",
+            Path::new("Editor/__init__.py"),
+            FormScope::Dependency,
+        )
+        .unwrap();
+        let main_modules = BTreeSet::from(["Library.Editor".to_owned()]);
+        let base = "@overload\ndef open_form(form: str, /, *args: Any, **kwargs: Any) -> Any: ...\n";
+        let stubs = open_form_stubs(base, &[top, nested, dep], &main_modules, "_anvil_form_types")
+            .unwrap()
+            .unwrap();
+        assert!(
+            stubs
+                .init_stub
+                .contains(r#"def open_form(form: _AnvilFormLiteral["Form1"], /, *args: _AnvilFormAny, **kwargs: _AnvilFormAny) -> _AnvilForm0: ..."#)
+        );
+        assert!(
+            stubs
+                .init_stub
+                .contains(r#"def open_form(form: _AnvilFormLiteral["Main.Form1", "Main.Main.Form1"], /, *args: _AnvilFormAny, **kwargs: _AnvilFormAny) -> _AnvilForm1: ..."#)
+        );
+        assert!(!stubs.init_stub.contains(r#""Library.Editor""#));
+        assert!(stubs.form_types_stub.contains("from Main.Form1 import Form1 as _Imported0"));
+        assert!(stubs.form_types_stub.contains("from Main.Main.Form1 import Form1 as _Imported1"));
+    }
+
+    #[test]
+    fn open_form_types_module_avoids_package_collisions() {
+        assert_eq!(open_form_types_module(["Main"]), "_anvil_form_types");
+        assert_eq!(
+            open_form_types_module(["_anvil_form_types", "Main"]),
+            "_anvil_form_types_"
+        );
+    }
+}

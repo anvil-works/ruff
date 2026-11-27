@@ -6,7 +6,10 @@ use anyhow::{Context, Result};
 use serde_json::{Value, json};
 use wasm_bindgen::prelude::*;
 
-use crate::forms::{RenderedForm, TemplateContext, class_name, parse_template, render};
+use crate::forms::{
+    FormScope, OpenFormStubs, OpenFormTarget, RenderedForm, TemplateContext, class_name,
+    open_form_stubs, open_form_types_module, parse_template, render,
+};
 use crate::{Source, dependencies, js_components, models, tables};
 
 /// IDE-resolved cache roots and logical dependency IDs mapped to those roots.
@@ -380,7 +383,8 @@ impl Preparation {
             projected.insert(format!("{api_root}/{path}"), text);
         }
         let mut component_api = None;
-        for (app, config) in &apps {
+        let mut open_forms = Vec::new();
+        for (app_index, (app, config)) in apps.iter().enumerate() {
             let package = config["package_name"]
                 .as_str()
                 .unwrap_or("main_app_package");
@@ -470,12 +474,24 @@ impl Preparation {
                 })();
                 let stub = match rendered {
                     Ok(cached) => {
-                        let relative = source.strip_prefix(&client)?.to_string_lossy();
+                        let relative_path = source.strip_prefix(&client)?;
+                        let relative = relative_path.to_string_lossy();
                         let local_name = relative
                             .strip_suffix("/__init__.py")
                             .or_else(|| relative.strip_suffix(".py"))
                             .unwrap_or(&relative)
                             .replace('/', ".");
+                        if let Some(target) = OpenFormTarget::from_relative_path(
+                            package,
+                            relative_path,
+                            if app_index == 0 {
+                                FormScope::Main
+                            } else {
+                                FormScope::Dependency
+                            },
+                        ) {
+                            open_forms.push(target);
+                        }
                         forms.push(json!({ "root": app, "name": local_name, "path": source, "data": cached.data }));
                         handler_types.insert(
                             source.to_string_lossy().into_owned(),
@@ -551,6 +567,35 @@ impl Preparation {
                 projected.insert(path, text);
             }
         }
+        let form_types_module = open_form_types_module(packages.keys().map(String::as_str));
+        if !is_server {
+            let main_package = apps[0].1["package_name"]
+                .as_str()
+                .unwrap_or("main_app_package");
+            let main_client_modules: std::collections::BTreeSet<String> =
+                python_sources(&files, &format!("{root}/client_code"))
+                    .into_iter()
+                    .filter_map(|source| {
+                        let module = crate::imports::module_name(main_package, &source.relative);
+                        module
+                            .strip_prefix(&format!("{main_package}."))
+                            .map(str::to_owned)
+                    })
+                    .collect();
+            let init_path = format!("{api_root}/anvil/__init__.pyi");
+            if let Some(base) = projected.get(&init_path)
+                && let Some(OpenFormStubs {
+                    init_stub,
+                    form_types_stub,
+                }) = open_form_stubs(base, &open_forms, &main_client_modules, &form_types_module)?
+            {
+                projected.insert(init_path, init_stub);
+                projected.insert(
+                    format!("{analysis_root}/{form_types_module}.pyi"),
+                    form_types_stub,
+                );
+            }
+        }
         for (relative, text) in &js.stubs {
             projected.insert(format!("{api_root}/{relative}"), text.clone());
         }
@@ -610,7 +655,7 @@ impl Preparation {
             }
         }
         Ok(json!({ "files": projected, "sources": sources, "excludedSources": excluded_sources, "sourceEnvironments": source_environments, "roots": [analysis_root, api_root], "diagnostics": diagnostics,
-        "dependencyRoots": dependency_roots, "tableRows": row_types, "formClasses": form_classes, "handlerTypes": handler_types,
+        "dependencyRoots": dependency_roots, "tableRows": row_types, "formClasses": form_classes, "handlerTypes": handler_types, "formTypesModule": form_types_module,
         "apps": apps.iter().map(|(path, config)| (path, config)).collect::<BTreeMap<_, _>>(), "forms": forms, "contextRoot": context_root }).to_string())
     }
 }

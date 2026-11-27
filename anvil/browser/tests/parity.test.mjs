@@ -928,7 +928,7 @@ test('generated modules preserve valid app package identities', () => withBrowse
     const results = await page.evaluate(async () => {
         const { BrowserAnalysisSession } = await import('/session.mjs');
         const results = [];
-        for (const packageName of ['Main', '_anvil_form_items', '_anvil_rpc_return_0', '_anvil_js_components']) {
+        for (const packageName of ['Main', '_anvil_form_items', '_anvil_form_types', '_anvil_rpc_return_0', '_anvil_js_components']) {
             const source = 'from ._anvil_designer import RowTemplateTemplate\nclass RowTemplate(RowTemplateTemplate):\n    def probe(self):\n        self.item.\n';
             const session = new BrowserAnalysisSession({ workerUrl: '/worker.mjs', rootUri: 'file:///app', files: {
                 '/app/anvil.yaml': JSON.stringify({ package_name: packageName }),
@@ -1270,4 +1270,139 @@ test('fresh REPL RPC completion follows its own expression and edited producer',
     assert(result.before.includes('upper'), JSON.stringify(result.before));
     assert(result.after.includes('bit_length') && !result.after.includes('upper'), JSON.stringify(result.after));
     assert(result.replaced.includes('upper') && !result.replaced.includes('bit_length'), JSON.stringify(result.replaced));
+}));
+
+test('open_form infers returned Form types for literals, dependencies and instances without leaking references', () => withBrowser(async page => {
+    const result = await page.evaluate(async () => {
+        const { BrowserAnalysisSession } = await import('/session.mjs');
+        const mainUri = 'file:///app/client_code/main.py';
+        const formUri = 'file:///app/client_code/Form1/__init__.py';
+        const source = [
+            'from anvil import open_form, open_form as show',
+            'from .Form1 import Form1',
+            'form = open_form("Form1", form=1)',
+            'form.custom_method()',
+            'form.label_1.text',
+            'form.missing_method()',
+            'qualified = show("Main.Form1")',
+            'qualified.custom_method()',
+            'dep = open_form("Library.Editor")',
+            'dep.save_document()',
+            'dep.missing_editor_method()',
+            'existing = open_form(Form1())',
+            'existing.custom_method()',
+            'def open_dynamic(name: str):',
+            '    result = open_form(name)',
+            '    result.anything()',
+            'open_form(form="Form1")',
+        ].join('\n') + '\n';
+        const formSource = [
+            'from ._anvil_designer import StaleNameTemplate',
+            'class Form1(StaleNameTemplate):',
+            '    def custom_method(self) -> str:',
+            '        return "ok"',
+        ].join('\n') + '\n';
+        const template = (name, components = []) => JSON.stringify({ class_name: name, container: { type: 'ColumnPanel' }, components });
+        const session = new BrowserAnalysisSession({ workerUrl: '/worker.mjs', rootUri: 'file:///app', files: {
+            '/app/anvil.yaml': JSON.stringify({ package_name: 'Main', dependencies: [{ app_id: 'LIB' }] }),
+            '/app/client_code/__init__.py': '',
+            '/app/client_code/main.py': source,
+            '/app/client_code/Form1/__init__.py': formSource,
+            '/app/client_code/Form1/form_template.yaml': template('StaleName', [{ name: 'label_1', type: 'Label' }]),
+            '/app/.anvil/deps/LIB/anvil.yaml': 'package_name: Library\n',
+            '/app/.anvil/deps/LIB/client_code/Editor/__init__.py': 'from ._anvil_designer import EditorTemplate\nclass Editor(EditorTemplate):\n    def save_document(self) -> None: pass\n',
+            '/app/.anvil/deps/LIB/client_code/Editor/form_template.yaml': template('Editor'),
+        } });
+        try {
+            const diagnostics = (await session.query('textDocument/diagnostic', { textDocument: { uri: mainUri } })).result.items;
+            const hover = (await session.query('textDocument/hover', {
+                textDocument: { uri: mainUri }, position: { line: 2, character: 1 },
+            })).result?.contents?.value ?? '';
+            const typeDef = (await session.query('textDocument/typeDefinition', {
+                textDocument: { uri: mainUri }, position: { line: 2, character: 1 },
+            })).result;
+            const references = (await session.query('textDocument/references', {
+                textDocument: { uri: formUri }, position: { line: 1, character: 7 }, context: { includeDeclaration: false },
+            })).result;
+            const rename = (await session.query('textDocument/rename', {
+                textDocument: { uri: formUri }, position: { line: 1, character: 7 }, newName: 'Dashboard',
+            })).result;
+            await session.openDocument(mainUri, source + 'form.\n');
+            const completions = (await session.query('textDocument/completion', {
+                textDocument: { uri: mainUri }, position: { line: 17, character: 5 }, context: { autoImport: false },
+            })).result.items.map(item => item.label);
+            await session.openDocument(mainUri, 'import _anvil_form');
+            const privateImport = (await session.query('textDocument/completion', {
+                textDocument: { uri: mainUri }, position: { line: 0, character: 'import _anvil_form'.length },
+            })).result.items.map(item => item.label);
+            return { diagnostics, completions, hover, typeDef, references, rename, privateImport, formUri };
+        } finally { session.dispose(); }
+    });
+    const codes = result.diagnostics.map(item => [item.range.start.line, item.code]);
+    assert.deepEqual(codes, [[5, 'unresolved-attribute'], [10, 'unresolved-attribute'], [16, 'no-matching-overload']], JSON.stringify(result.diagnostics));
+    assert(result.completions.includes('custom_method') && result.completions.includes('label_1'), JSON.stringify(result.completions));
+    assert.match(result.hover, /\bForm1\b/);
+    assert(result.typeDef.some(target => target.uri === result.formUri), JSON.stringify(result.typeDef));
+    assert(!result.references.some(ref => ref.uri.includes('_anvil_form_types')), JSON.stringify(result.references));
+    assert(result.rename?.documentChanges?.length > 0, JSON.stringify(result.rename));
+    assert(!result.rename.documentChanges.some(change => change.textDocument.uri.includes('_anvil_form_types')), JSON.stringify(result.rename));
+    assert(!result.privateImport.includes('_anvil_form_types'), JSON.stringify(result.privateImport));
+}));
+
+test('open_form preserves app-relative precedence and invalidates derived Form items across edits', () => withBrowser(async page => {
+    const result = await page.evaluate(async () => {
+        const { BrowserAnalysisSession } = await import('/session.mjs');
+        const mainUri = 'file:///app/client_code/main.py';
+        const formUri = 'file:///app/client_code/Form1/__init__.py';
+        const nestedUri = 'file:///app/client_code/Main/Form1/__init__.py';
+        const helperUri = 'file:///app/client_code/_anvil_form_types.py';
+        const rowUri = 'file:///app/client_code/RowTemplate/__init__.py';
+        const template = name => JSON.stringify({ class_name: name, container: { type: 'ColumnPanel' }, components: [] });
+        const formCode = ret => `from ._anvil_designer import Form1Template\nclass Form1(Form1Template):\n    def get_value(self) -> ${ret}: ...\n`;
+        const session = new BrowserAnalysisSession({ workerUrl: '/worker.mjs', rootUri: 'file:///app', files: {
+            '/app/anvil.yaml': JSON.stringify({ package_name: 'Main', dependencies: [{ app_id: 'LIB' }] }),
+            '/app/client_code/__init__.py': '',
+            '/app/client_code/Main/__init__.py': '',
+            '/app/client_code/Form1/__init__.py': formCode('str'),
+            '/app/client_code/Form1/form_template.yaml': template('Form1'),
+            '/app/client_code/Main/Form1/__init__.py': 'from ._anvil_designer import Form1Template\nclass Form1(Form1Template):\n    def nested_only(self) -> None: pass\n',
+            '/app/client_code/Main/Form1/form_template.yaml': template('Form1'),
+            '/app/client_code/Library/__init__.py': '',
+            '/app/client_code/Library/Editor.py': 'from anvil import ColumnPanel\nclass Editor(ColumnPanel):\n    def local_only(self) -> None: pass\n',
+            '/app/.anvil/deps/LIB/anvil.yaml': 'package_name: Library\n',
+            '/app/.anvil/deps/LIB/client_code/Editor/__init__.py': 'from ._anvil_designer import EditorTemplate\nclass Editor(EditorTemplate):\n    def dep_only(self) -> None: pass\n',
+            '/app/.anvil/deps/LIB/client_code/Editor/form_template.yaml': template('Editor'),
+            '/app/client_code/_anvil_form_types.py': 'data: str = ""\n',
+            '/app/client_code/RowTemplate/__init__.py': 'from ._anvil_designer import RowTemplateTemplate\nclass RowTemplate(RowTemplateTemplate):\n    def probe(self):\n        return self.item\n',
+            '/app/client_code/RowTemplate/form_template.yaml': template('RowTemplate'),
+            '/app/client_code/main.py': 'from typing import Literal\nfrom anvil import open_form\nfrom .RowTemplate import RowTemplate\nnested = open_form("Main.Form1")\nnested.nested_only()\nopen_form("Library.Editor").local_only()\ntarget: Literal["Form1"] = "Form1"\nrow = RowTemplate(item=open_form(target).get_value())\n',
+        } });
+        const hoverItem = async () => (await session.query('textDocument/hover', {
+            textDocument: { uri: rowUri }, position: { line: 3, character: 21 },
+        })).result?.contents?.value ?? '';
+        try {
+            const collisionDiag = (await session.query('textDocument/diagnostic', { textDocument: { uri: mainUri } })).result.items;
+            const collisionDef = (await session.query('textDocument/definition', {
+                textDocument: { uri: mainUri }, position: { line: 3, character: 22 },
+            })).result;
+            const collisionTypeDef = (await session.query('textDocument/typeDefinition', {
+                textDocument: { uri: mainUri }, position: { line: 3, character: 1 },
+            })).result;
+            const itemBefore = await hoverItem();
+            await session.openDocument(formUri, formCode('int'));
+            const itemAfterFormEdit = await hoverItem();
+            await session.openDocument(mainUri, 'from .RowTemplate import RowTemplate\nfrom ._anvil_form_types import data\nrow = RowTemplate(item=data)\n');
+            const helperBefore = await hoverItem();
+            await session.openDocument(helperUri, 'data: int = 42\n');
+            const helperAfter = await hoverItem();
+            return { collisionDiag, collisionDef, collisionTypeDef, nestedUri, itemBefore, itemAfterFormEdit, helperBefore, helperAfter };
+        } finally { session.dispose(); }
+    });
+    assert.deepEqual(result.collisionDiag, [], JSON.stringify(result.collisionDiag));
+    assert(result.collisionDef.some(target => target.uri === result.nestedUri), JSON.stringify(result.collisionDef));
+    assert(result.collisionTypeDef.some(target => target.uri === result.nestedUri), JSON.stringify(result.collisionTypeDef));
+    assert.match(result.itemBefore, /\bstr\b/);
+    assert.match(result.itemAfterFormEdit, /\bint\b/);
+    assert.match(result.helperBefore, /\bstr\b/);
+    assert.match(result.helperAfter, /\bint\b/);
 }));

@@ -383,7 +383,22 @@ def get_open_form() -> Any:
     ...
 
 
-def open_form(form: str | Any, *args: Any, **kwargs: Any) -> None:
+_FormT = TypeVar("_FormT", bound="Component")
+
+
+@overload
+def open_form(form: _FormT, /) -> _FormT:
+    """Open the specified form as a new page.
+
+    If 'form' is a string, a new form will be created (extra arguments will be passed
+    to its constructor). If 'form' is a Form object, it will be opened directly.
+
+    [Anvil Docs](https://anvil.works/docs/client/navigation#using-open_form)"""
+    ...
+
+
+@overload
+def open_form(form: str, /, *args: Any, **kwargs: Any) -> Any:
     """Open the specified form as a new page.
 
     If 'form' is a string, a new form will be created (extra arguments will be passed

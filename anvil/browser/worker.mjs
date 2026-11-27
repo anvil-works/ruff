@@ -69,6 +69,7 @@ const registrationPlans = new Map();
 let remoteTypes;
 let inferredFormItems;
 let itemTypeModule;
+let formTypesModule;
 let queue = Promise.all([initialize(), initializeCompatibility()]);
 
 Comlink.expose({
@@ -311,6 +312,7 @@ function prepareApp(server = isServer, inferredItems = inferredFormItems) {
     formClasses = new Map(Object.entries(prepared.formClasses ?? {}));
     handlerTypes = prepared.handlerTypes ?? {};
     itemTypeModule = privateModule('_anvil_form_items');
+    formTypesModule = prepared.formTypesModule;
     formCatalogue = (prepared.forms ?? []).map(({ path, ...form }) =>
         ({ ...form, uri: uriForPath(path), config: appConfigs[form.root] }));
     dependencyRoots = prepared.dependencyRoots ?? {};
@@ -628,7 +630,7 @@ function acrossRuntimes(uri, position, query) {
     const handle = fileHandle(uri);
     // These imports are derived from user declarations and regenerated after
     // edits. They are neither user references nor required rename participants.
-    const inferredUris = new Set([...rpcDeclarations().map(entry => entry.module), itemTypeModule].flatMap(module => ['client', 'server'].map(environment =>
+    const inferredUris = new Set([...rpcDeclarations().map(entry => entry.module), itemTypeModule, formTypesModule].filter(Boolean).flatMap(module => ['client', 'server'].map(environment =>
         uriForPath(`${root}/.anvil/analysis/${environment}/${module}.pyi`))));
     const mapped = sourceMaps.get(handle.path())?.position(position) ?? position;
     const result = query(handle, mapped).filter(target => !inferredUris.has(target.uri));
@@ -1846,7 +1848,10 @@ function sourceInputs(paths, visit) {
                 }
             }
             const handle = handles.get(canonical);
-            for (const imported of importsFor(workspace.sourceText(handle))) {
+            const source = workspace.sourceText(handle);
+            const isClientAnvilInit = canonical === `${root}/.anvil/types/client/anvil/__init__.pyi`;
+            for (const imported of importsFor(source)) {
+                if (isClientAnvilInit && !imported.relative && imported.module === formTypesModule) continue;
                 let resolved = false;
                 for (const position of imported.positions) {
                     const targets = locations(workspace.gotoDefinition(handle, new ty.Position(position.line + 1, position.character + 1)));
@@ -1858,6 +1863,36 @@ function sourceInputs(paths, visit) {
                     }
                 }
                 imports.unresolved ||= !resolved && (imported.relative && imported.module !== null || packages.has(imported.module?.split('.')[0]));
+            }
+            // Literal open_form calls depend on the opened Form's return type without
+            // walking every Form via anvil/__init__.pyi; non-literal calls (such as a
+            // Literal-typed variable) conservatively depend on all catalogue Forms.
+            if (!isServer && canonical.endsWith('.py') && formCatalogue.length) {
+                let conservative = false;
+                for (const call of callsFor(source).arguments) {
+                    if (!call.values.length) continue;
+                    // Fast-path: skip bare builtin calls (e.g. len, print) before resolving
+                    // API ownership; attribute calls like anvil.open_form still resolve.
+                    const atCalleeStart = call.position.line === call.callee.start.line
+                        && call.position.character === call.callee.start.character;
+                    if (atCalleeStart && workspace.isBuiltinReference(handle, new ty.Position(call.position.line + 1, call.position.character + 1))) continue;
+                    if (apiFunction(handle, call.position) !== 'open_form') continue;
+                    const first = call.values.find(value => value.index === 0);
+                    if (first?.literal) {
+                        // open_form takes dotted module names; ignore legacy colon-delimited
+                        // Designer dependency syntax accepted by formPropertyTarget.
+                        if (first.literal.value.includes(':')) continue;
+                        const form = formPropertyTarget(first.literal.value, { root }, formCatalogue, dependencyRoots);
+                        const target = form && projections.get(pathForUri(form.uri));
+                        if (target) imports.paths.push(target);
+                    } else if (!conservative) {
+                        conservative = true;
+                        for (const form of formCatalogue) {
+                            const target = projections.get(pathForUri(form.uri));
+                            if (target) imports.paths.push(target);
+                        }
+                    }
+                }
             }
             resolvedImports.set(canonical, imports);
         }
@@ -2567,8 +2602,8 @@ function request(method, params) {
                 let module = importModule;
                 if (!module && item.kind === ty.CompletionKind.Module && (fromImport || absoluteImport))
                     module = modulePrefix ? `${modulePrefix}.${item.name}` : item.name;
-                if (module?.startsWith('_anvil_rpc_return_') &&
-                    rpcDeclarations().some(entry => entry.module === module)) return [];
+                if ((formTypesModule && module === formTypesModule) || (module?.startsWith('_anvil_rpc_return_') &&
+                    rpcDeclarations().some(entry => entry.module === module))) return [];
                 if (!isServer && sourceEnvironments.size && module && !clientRuntime.moduleSupported(module)) return [];
                 if (generatedBindings.has(JSON.stringify([item.name, item.detail])) || constructor && item.name === 'form=' ||
                     hideDeletion && item.name === 'delete_all_rows' || hideSelfDeletion && item.name === 'self.delete_all_rows') return [];

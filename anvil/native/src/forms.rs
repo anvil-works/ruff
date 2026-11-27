@@ -16,6 +16,8 @@ pub struct ClientCode<'a> {
     pub package: &'a str,
 }
 
+pub use anvil_ty_compat::forms::FormScope;
+
 pub fn designers(
     client: ClientCode<'_>,
     api: &str,
@@ -23,6 +25,8 @@ pub fn designers(
     dependencies: &[crate::dependencies::Dependency],
     handles: &mut crate::handles::Registry,
     diagnostics: &mut Vec<Value>,
+    open_forms: &mut Vec<anvil_ty_compat::forms::OpenFormTarget>,
+    scope: FormScope,
 ) -> Result<Vec<(PathBuf, String)>> {
     let ClientCode {
         root,
@@ -103,6 +107,13 @@ pub fn designers(
                 &template,
                 rendered.components,
             );
+            if let Some(target) = anvil_ty_compat::forms::OpenFormTarget::from_relative_path(
+                package,
+                source.strip_prefix(root)?,
+                scope,
+            ) {
+                open_forms.push(target);
+            }
             Ok(rendered.stub)
         })();
         let stub = match prepared {

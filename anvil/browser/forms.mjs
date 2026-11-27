@@ -99,5 +99,5 @@ export function formPropertyTarget(value, owner, forms, dependencyRoots) {
         const root = dependencyRoots[owner.root]?.[legacy[1]];
         return forms.find(form => form.root === root && form.name === legacy[2]);
     }
-    return forms.find(form => `${form.config.package_name}.${form.name}` === value);
+    return forms.find(form => `${form.config?.package_name ?? 'main_app_package'}.${form.name}` === value);
 }

@@ -202,6 +202,8 @@ fn validate(app: &Path, files: &[PathBuf]) -> Result<Vec<Value>> {
         .collect();
     let mut handles = handles::Registry::default();
     let mut output = Vec::new();
+    let mut main_open_forms = Vec::new();
+    let mut dep_open_forms = Vec::new();
     let dependencies = cached
         .iter()
         .map(|dependency| {
@@ -220,6 +222,8 @@ fn validate(app: &Path, files: &[PathBuf]) -> Result<Vec<Value>> {
                 &cached,
                 &mut handles,
                 &mut output,
+                &mut dep_open_forms,
+                forms::FormScope::Dependency,
             )?;
             Ok((dependency.package.clone(), client, server, forms))
         })
@@ -242,7 +246,13 @@ fn validate(app: &Path, files: &[PathBuf]) -> Result<Vec<Value>> {
         &cached,
         &mut handles,
         &mut output,
+        &mut main_open_forms,
+        forms::FormScope::Main,
     )?;
+    // Keep main-app Forms before dependencies so open_form_stubs gives them
+    // precedence on any overlapping qualified name.
+    main_open_forms.extend(dep_open_forms);
+    let open_forms = main_open_forms;
     // Preparation diagnostics belong to the same selected Python sources as
     // semantic checks; unrelated app/dependency forms must not fail a file target.
     output.retain(|item| {
@@ -377,6 +387,43 @@ fn validate(app: &Path, files: &[PathBuf]) -> Result<Vec<Value>> {
             if entry.file_type().is_file() {
                 let relative = entry.path().strip_prefix(stubs.join(environment))?;
                 let mut text = fs::read_to_string(entry.path())?;
+                if relative == Path::new("anvil/__init__.pyi")
+                    && environment == "client"
+                {
+                    let main_client_modules: std::collections::BTreeSet<String> = client
+                        .iter()
+                        .filter_map(|source| {
+                            let module =
+                                anvil_ty_compat::imports::module_name(package, &source.relative);
+                            module
+                                .strip_prefix(&format!("{package}."))
+                                .map(str::to_owned)
+                        })
+                        .collect();
+                    let form_types_module = anvil_ty_compat::forms::open_form_types_module(
+                        std::iter::once(package).chain(
+                            dependencies
+                                .iter()
+                                .map(|(dep_package, _, _, _)| dep_package.as_str()),
+                        ),
+                    );
+                    if let Some(anvil_ty_compat::forms::OpenFormStubs {
+                        init_stub,
+                        form_types_stub,
+                    }) = anvil_ty_compat::forms::open_form_stubs(
+                        &text,
+                        &open_forms,
+                        &main_client_modules,
+                        &form_types_module,
+                    )? {
+                        text = init_stub;
+                        mount(
+                            &fs,
+                            &root.join(format!("{form_types_module}.pyi")),
+                            &form_types_stub,
+                        )?;
+                    }
+                }
                 if relative == Path::new("anvil/tables/__init__.pyi")
                     && let Some(stub) =
                         tables::stub(&config["db_schema"], &text, &models, environment)?

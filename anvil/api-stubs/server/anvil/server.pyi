@@ -48,6 +48,16 @@ class ScriptExitError(Exception):
     ...
 
 
+class PortableException(Exception):
+    """Base class for portable exceptions.
+
+    Any subclass of PortableException can be passed between client, server and Uplink
+    code as its original exception class. All subclasses of PortableException are
+    automatically also portable classes.
+    """
+    ...
+
+
 class SessionExpiredError(Exception):
     """Raised when the session has expired."""
     ...
@@ -365,11 +375,15 @@ def connect(url: str, /, **kwargs: Any) -> Any:
     ...
 
 # Portable classes
+@overload
 def portable_class(cls: type[_T], /) -> type[_T]:
     """Decorator to make a class portable across client and server.
 
     [Anvil Docs](https://anvil.works/docs/other-concepts/portable-classes)"""
     ...
+
+@overload
+def portable_class(name: str, /) -> Callable[[type[_T]], type[_T]]: ...
 
 
 # ============================================================================

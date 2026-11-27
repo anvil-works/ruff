@@ -325,6 +325,66 @@ class ValidateIntegration(unittest.TestCase):
         self.assertEqual(result.returncode, 0, (result.stdout, result.stderr))
         self.assertTrue(events[-1]["success"], events)
 
+    @unittest.skipUnless(NATIVE, "native proof boundary")
+    def test_open_form_infers_returned_form_type(self):
+        self.write(
+            "client_code/Form1/form_template.yaml",
+            "container:\n  type: ColumnPanel\ncomponents:\n- name: label_1\n  type: Label\n",
+        )
+        self.write(
+            "client_code/Form1/__init__.py",
+            "from ._anvil_designer import Form1Template\n"
+            "class Form1(Form1Template):\n"
+            "    def custom_method(self) -> str:\n"
+            "        return 'ok'\n",
+        )
+        config = self.app / "anvil.yaml"
+        config.write_text(config.read_text() + "dependencies:\n- app_id: LIB\n")
+        self.write(".anvil/deps/LIB/anvil.yaml", "package_name: Library\n")
+        self.write(
+            ".anvil/deps/LIB/client_code/Editor/form_template.yaml",
+            "container:\n  type: ColumnPanel\ncomponents: []\n",
+        )
+        self.write(
+            ".anvil/deps/LIB/client_code/Editor/__init__.py",
+            "from ._anvil_designer import EditorTemplate\n"
+            "class Editor(EditorTemplate):\n"
+            "    def dep_only(self) -> None: pass\n",
+        )
+        self.write("client_code/Library/__init__.py", "")
+        self.write(
+            "client_code/Library/Editor.py",
+            "from anvil import ColumnPanel\n"
+            "class Editor(ColumnPanel):\n"
+            "    def local_only(self) -> None: pass\n",
+        )
+        file = self.write(
+            "client_code/Caller.py",
+            "from anvil import open_form\n"
+            "from .Form1 import Form1\n"
+            "form = open_form('Form1', form=1)\n"
+            "form.custom_method()\n"
+            "form.label_1.text\n"
+            "form.missing_method()\n"
+            "existing = open_form(Form1())\n"
+            "existing.custom_method()\n"
+            "def open_dynamic(name: str):\n"
+            "    result = open_form(name)\n"
+            "    result.anything()\n"
+            "open_form('Library.Editor').local_only()\n"
+            "open_form(form='Form1')\n",
+        )
+        result, events = self.validate(file)
+        self.assertEqual(result.returncode, 1, (result.stdout, result.stderr))
+        issues = [
+            (issue.get("line"), issue.get("rule"))
+            for issue in events[-1]["data"]["issues"]
+            if issue.get("file") == str(file)
+        ]
+        self.assertEqual(
+            issues, [(6, "unresolved-attribute"), (13, "no-matching-overload")], events
+        )
+
 
 if __name__ == "__main__":
     unittest.main()
